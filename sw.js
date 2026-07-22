@@ -1,23 +1,77 @@
-const CACHE = 'vocab-app-shell-v1';
-const SHELL = ['/', '/index.html', '/manifest.json'];
+const CACHE = 'vocab-app-shell-v2';
+const SHELL = ['/manifest.json'];
 
-self.addEventListener('install', (e) => {
-  e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL)).catch(()=>{}));
+self.addEventListener('install', (event) => {
+  event.waitUntil(
+    caches
+      .open(CACHE)
+      .then((cache) => cache.addAll(SHELL))
+      .catch(() => {})
+  );
+
   self.skipWaiting();
 });
 
-self.addEventListener('activate', (e) => {
-  e.waitUntil(
-    caches.keys().then(keys => Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k))))
+self.addEventListener('activate', (event) => {
+  event.waitUntil(
+    caches
+      .keys()
+      .then((keys) =>
+        Promise.all(
+          keys
+            .filter((key) => key !== CACHE)
+            .map((key) => caches.delete(key))
+        )
+      )
+      .then(() => self.clients.claim())
   );
-  self.clients.claim();
 });
 
-// App shell: cache-first. Everything else (Supabase, fonts, esm.sh): network-first, no caching of data.
-self.addEventListener('fetch', (e) => {
-  const url = new URL(e.request.url);
-  if(SHELL.includes(url.pathname)){
-    e.respondWith(caches.match(e.request).then(r => r || fetch(e.request)));
+self.addEventListener('fetch', (event) => {
+  const request = event.request;
+  const url = new URL(request.url);
+
+  // 首页和 index.html 使用网络优先，避免一直显示旧版本
+  if (
+    request.mode === 'navigate' ||
+    url.pathname === '/' ||
+    url.pathname === '/index.html'
+  ) {
+    event.respondWith(
+      fetch(request)
+        .then((response) => {
+          const copy = response.clone();
+
+          caches
+            .open(CACHE)
+            .then((cache) => cache.put('/index.html', copy));
+
+          return response;
+        })
+        .catch(() => caches.match('/index.html'))
+    );
+
+    return;
   }
-  // else: let it hit the network normally (don't intercept API/data calls)
+
+  // manifest 使用缓存优先
+  if (SHELL.includes(url.pathname)) {
+    event.respondWith(
+      caches.match(request).then((cached) => {
+        if (cached) return cached;
+
+        return fetch(request).then((response) => {
+          const copy = response.clone();
+
+          caches
+            .open(CACHE)
+            .then((cache) => cache.put(request, copy));
+
+          return response;
+        });
+      })
+    );
+  }
+
+  // Supabase、字体、esm.sh 等其他请求不拦截
 });

@@ -1,0 +1,10 @@
+{
+  "name": "词根图谱 · Root System",
+  "short_name": "词根图谱",
+  "description": "词根居中，派生词像新芽一样向外生长的单词记忆图谱",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#121c16",
+  "theme_color": "#121c16",
+  "icons": []
+}

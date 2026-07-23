@@ -77,12 +77,12 @@
   .util-row{ display:flex; gap: 8px; flex-wrap: wrap; }
 
   /* ---------- Add-word panel ---------- */
-  #addPanel, #syncPanel{
+  #addPanel, #syncPanel, #photoPanel{
     background: var(--card); border: 1px solid var(--gold-line); border-radius: var(--radius-card);
     padding: 20px; margin-bottom: 30px; display:none;
   }
-  #addPanel.open, #syncPanel.open{ display:block; }
-  #addPanel h3, #syncPanel h3{ margin: 0 0 14px; font-family: var(--font-display); font-size: 18px; font-weight:600; }
+  #addPanel.open, #syncPanel.open, #photoPanel.open{ display:block; }
+  #addPanel h3, #syncPanel h3, #photoPanel h3{ margin: 0 0 14px; font-family: var(--font-display); font-size: 18px; font-weight:600; }
   .form-grid{ display:grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; }
   .field{ display:flex; flex-direction:column; gap: 5px; }
   .field label{ font-size: 11px; color: var(--ink-faint); letter-spacing: 0.03em; }
@@ -102,6 +102,19 @@
   .sync-code-display .code{ font-family: var(--font-mono); font-size:18px; letter-spacing:0.05em; color:var(--sprout); }
   .sync-note{ font-size:12.5px; color:var(--ink-dim); line-height:1.6; margin-bottom:14px; }
   .sync-note b{ color: var(--amber); }
+
+  #photo-choose{ font-size: 13px; padding: 9px 18px; }
+  #photo-preview{ display:block; }
+
+  .review-row{ background: var(--bg-2); border: 1px solid var(--gold-line); border-radius: 10px;
+    padding: 12px; margin-top: 10px; }
+  .review-row .form-grid{ margin-bottom: 6px; }
+  .review-row-head{ display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; }
+  .review-row-head span{ font-size: 11px; color: var(--ink-faint); font-family: var(--font-mono); }
+  .review-empty{ color: var(--ink-faint); font-size: 13px; padding: 14px 0; text-align:center; }
+  .spinner{ display:inline-block; width:12px; height:12px; border-radius:50%;
+    border: 2px solid var(--ink-faint); border-top-color: var(--sprout); animation: spin 0.7s linear infinite; margin-right:6px; vertical-align:-1px; }
+  @keyframes spin{ to{ transform: rotate(360deg); } }
 
   /* ---------- Grid of root cards ---------- */
   #grid{ display:grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 22px; align-items: start; }
@@ -215,6 +228,7 @@
       <input id="search" type="text" placeholder="搜索词根 / 单词 / 释义 …">
       <div class="util-row">
         <button class="btn" id="toggleAdd">+ 录入新词</button>
+        <button class="btn ghost small" id="togglePhoto">📷 拍照识别导入</button>
         <button class="btn ghost small" id="btnExport">导出备份</button>
         <button class="btn ghost small" id="btnImportTrigger">导入备份</button>
         <input type="file" id="btnImport" accept="application/json" style="display:none;">
@@ -288,6 +302,23 @@
       <button class="btn ghost small" id="cancelAdd">取消</button>
       <button class="btn small" id="submitAdd">保存</button>
     </div>
+  </div>
+
+  <div id="photoPanel">
+    <h3>拍照识别导入</h3>
+    <div class="sync-note">拍一页手写笔记（一次一页效果最好，光线均匀、别斜拍），AI 会识别成单词条目，你确认无误后再批量导入，不会自动跳过这一步。</div>
+    <div id="photo-upload-zone">
+      <input type="file" id="photo-input" accept="image/*" capture="environment" style="display:none;">
+      <button class="btn" id="photo-choose">选择 / 拍摄照片</button>
+      <span id="photo-filename" style="font-size:12.5px;color:var(--ink-faint);margin-left:10px;"></span>
+    </div>
+    <img id="photo-preview" style="display:none; max-width:220px; border-radius:10px; margin-top:12px; border:1px solid var(--gold-line);">
+    <div class="form-actions" style="margin-top:14px;">
+      <span class="form-msg" id="photoMsg"></span>
+      <button class="btn ghost small" id="photoCancel">关闭</button>
+      <button class="btn small" id="photoRecognize" disabled>开始识别</button>
+    </div>
+    <div id="photoReview"></div>
   </div>
 
   <main id="grid"></main>
@@ -385,7 +416,7 @@ function makeDiagram(group, idx){
     const angle = (2*Math.PI*i/n) - Math.PI/2;
     positions.push({nx: cx+R*Math.cos(angle), ny: cy+R*Math.sin(angle)});
   }
-  positions.forEach(p => { svg += `<line class="link" x1="${cx}" y1="${cy}" x2="${p.nx}" y2="${p.ny}" />`; });
+  // 不再画连线，单词只按放射状围绕词根排布，视觉上更清爽
   svg += `<g class="node-root"><rect x="${cx-rootBoxW/2}" y="${cy-rootBoxH/2}" width="${rootBoxW}" height="${rootBoxH}" rx="12" />`;
   rootLines.forEach((l, li) => {
     const dy = (li - (rootLines.length-1)/2) * 15;
@@ -734,6 +765,158 @@ document.getElementById('btnImport').addEventListener('change', async (ev) => {
     showToast('导入失败：' + err.message, true);
   }
   ev.target.value = '';
+});
+
+// ---------- Photo recognize & import ----------
+let photoFile = null;
+let reviewEntries = [];
+
+document.getElementById('togglePhoto').addEventListener('click', () => {
+  document.getElementById('photoPanel').classList.toggle('open');
+});
+document.getElementById('photoCancel').addEventListener('click', () => {
+  document.getElementById('photoPanel').classList.remove('open');
+});
+document.getElementById('photo-choose').addEventListener('click', () => {
+  document.getElementById('photo-input').click();
+});
+document.getElementById('photo-input').addEventListener('change', (ev) => {
+  const file = ev.target.files[0];
+  if(!file) return;
+  photoFile = file;
+  document.getElementById('photo-filename').textContent = file.name;
+  const preview = document.getElementById('photo-preview');
+  preview.src = URL.createObjectURL(file);
+  preview.style.display = 'block';
+  document.getElementById('photoRecognize').disabled = false;
+  document.getElementById('photoReview').innerHTML = '';
+});
+
+function fileToBase64(file){
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result.split(',')[1]);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+function reviewFieldRow(entry, idx){
+  return `
+    <div class="review-row" data-idx="${idx}">
+      <div class="review-row-head">
+        <span>识别结果 #${idx+1}</span>
+        <button class="btn ghost small" data-remove="${idx}">删除这条</button>
+      </div>
+      <div class="form-grid">
+        <div class="field"><label>日期</label><input data-f="date" data-idx="${idx}" value="${esc(entry.date)}"></div>
+        <div class="field span2"><label>词根组</label><input data-f="root" data-idx="${idx}" value="${esc(entry.root)}"></div>
+        <div class="field"><label>掌握度</label>
+          <select data-f="mastery" data-idx="${idx}">
+            <option value="" ${entry.mastery===''?'selected':''}>已掌握</option>
+            <option value="△" ${entry.mastery==='△'?'selected':''}>△ 印象模糊</option>
+            <option value="✗" ${entry.mastery==='✗'?'selected':''}>✗ 需重点复习</option>
+          </select>
+        </div>
+        <div class="field"><label>单词 *</label><input data-f="word" data-idx="${idx}" value="${esc(entry.word)}"></div>
+        <div class="field"><label>词性</label><input data-f="pos" data-idx="${idx}" value="${esc(entry.pos)}"></div>
+        <div class="field span2"><label>释义 *</label><input data-f="meaning" data-idx="${idx}" value="${esc(entry.meaning)}"></div>
+        <div class="field span2"><label>拆解</label><input data-f="breakdown" data-idx="${idx}" value="${esc(entry.breakdown)}"></div>
+        <div class="field span2"><label>例句 / 搭配</label><textarea data-f="example" data-idx="${idx}">${esc(entry.example)}</textarea></div>
+      </div>
+    </div>`;
+}
+
+function renderReview(){
+  const container = document.getElementById('photoReview');
+  if(reviewEntries.length === 0){
+    container.innerHTML = '';
+    return;
+  }
+  let html = reviewEntries.map((e, i) => reviewFieldRow(e, i)).join('');
+  html += `<div class="form-actions" style="margin-top:14px;">
+    <span class="form-msg">共 ${reviewEntries.length} 条，确认无误后再导入</span>
+    <button class="btn small" id="photoConfirmImport">确认导入全部</button>
+  </div>`;
+  container.innerHTML = html;
+
+  container.querySelectorAll('[data-remove]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const idx = +btn.dataset.remove;
+      reviewEntries.splice(idx, 1);
+      renderReview();
+    });
+  });
+  container.querySelectorAll('[data-f]').forEach(input => {
+    input.addEventListener('input', () => {
+      const idx = +input.dataset.idx;
+      reviewEntries[idx][input.dataset.f] = input.value;
+    });
+  });
+  const confirmBtn = document.getElementById('photoConfirmImport');
+  if(confirmBtn){
+    confirmBtn.addEventListener('click', async () => {
+      const cleaned = reviewEntries
+        .map(e => ({ ...e, id: genId() }))
+        .filter(e => e.word && e.word.trim() && e.meaning && e.meaning.trim());
+      if(cleaned.length === 0){
+        showToast('没有可导入的条目（单词/释义不能为空）', true);
+        return;
+      }
+      entries = [...entries, ...cleaned];
+      cacheLocally();
+      render();
+      const ok = await upsertMany(cleaned);
+      showToast(ok ? `已导入 ${cleaned.length} 条` : '本机已导入，云端同步失败');
+      reviewEntries = [];
+      document.getElementById('photoReview').innerHTML = '';
+      document.getElementById('photoPanel').classList.remove('open');
+      photoFile = null;
+      document.getElementById('photo-preview').style.display = 'none';
+      document.getElementById('photo-filename').textContent = '';
+      document.getElementById('photoRecognize').disabled = true;
+    });
+  }
+}
+
+document.getElementById('photoRecognize').addEventListener('click', async () => {
+  if(!photoFile) return;
+  const msg = document.getElementById('photoMsg');
+  const btn = document.getElementById('photoRecognize');
+  btn.disabled = true;
+  msg.innerHTML = `<span class="spinner"></span>识别中，可能需要几秒到十几秒…`;
+  try{
+    const base64 = await fileToBase64(photoFile);
+    const resp = await fetch('/api/recognize', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ imageBase64: base64, mediaType: photoFile.type || 'image/jpeg' })
+    });
+    const data = await resp.json();
+    if(!resp.ok){
+      msg.textContent = '识别失败：' + (data.error || resp.statusText);
+      msg.style.color = 'var(--rust)';
+      btn.disabled = false;
+      return;
+    }
+    reviewEntries = (data.entries || []).map(e => ({
+      date: e.date||'', root: e.root||'', mastery: e.mastery||'',
+      word: e.word||'', pos: e.pos||'', meaning: e.meaning||'',
+      breakdown: e.breakdown||'', example: e.example||''
+    }));
+    if(reviewEntries.length === 0){
+      msg.textContent = '没识别出内容，可以换一张更清晰的照片试试';
+      msg.style.color = 'var(--amber)';
+    } else {
+      msg.textContent = `识别到 ${reviewEntries.length} 条，请检查下面的内容再导入`;
+      msg.style.color = 'var(--sprout)';
+    }
+    renderReview();
+  }catch(err){
+    msg.textContent = '识别出错：' + err.message;
+    msg.style.color = 'var(--rust)';
+  }
+  btn.disabled = false;
 });
 
 document.getElementById('search').addEventListener('input', applySearchFilter);

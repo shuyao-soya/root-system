@@ -1,0 +1,953 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#121c16">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="词根图谱">
+<link rel="manifest" href="manifest.json">
+<title>词根图谱 · Root System</title>
+<style>
+  /* 字体：不依赖 Google Fonts（国内常连不上），用系统自带字体做接近的效果 */
+  :root{
+    --font-display: Georgia, 'Songti SC', 'STSong', 'Noto Serif SC', serif;
+    --font-body: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif;
+    --font-mono: ui-monospace, SFMono-Regular, 'SF Mono', Consolas, 'Liberation Mono', monospace;
+  }
+</style>
+<style>
+  :root{
+    --bg: #121c16; --bg-2: #17251d; --card: #1c2a21; --card-hover: #223228;
+    --soil-line: #24352a; --ink: #eae4d2; --ink-dim: #9fa895; --ink-faint: #6d7768;
+    --sprout: #bcd68a; --sprout-dim: #7f965a; --amber: #e0ac3f; --rust: #c1594f;
+    --gold-line: #3a4a34; --radius-card: 18px;
+  }
+  *{ box-sizing: border-box; }
+  html,body{ margin:0; padding:0; background: var(--bg); color: var(--ink);
+    font-family: var(--font-body); -webkit-font-smoothing: antialiased; }
+  body{ background-image:
+      radial-gradient(ellipse 80% 50% at 50% -10%, rgba(188,214,138,0.06), transparent),
+      repeating-linear-gradient(180deg, transparent, transparent 39px, var(--soil-line) 40px); }
+  .wrap{ max-width: 1400px; margin: 0 auto; padding: 40px 28px 100px; }
+
+  header{ display:flex; flex-direction:column; gap:16px; padding-bottom: 26px; margin-bottom: 30px;
+    border-bottom: 1px solid var(--gold-line); }
+  .eyebrow{ display:flex; align-items:center; justify-content: space-between; gap:10px;
+    font-family: var(--font-mono); font-size: 12px; letter-spacing: 0.18em;
+    text-transform: uppercase; color: var(--sprout-dim); }
+  .sync-status{ display:flex; align-items:center; gap:8px; text-transform:none; letter-spacing:normal; cursor:pointer; }
+  .sync-dot{ width:8px; height:8px; border-radius:50%; background: var(--sprout-dim); flex-shrink:0; }
+  .sync-dot.offline{ background: var(--rust); }
+  .sync-dot.syncing{ background: var(--amber); animation: pulse 1s infinite; }
+  @keyframes pulse{ 0%,100%{opacity:1;} 50%{opacity:.3;} }
+
+  h1{ font-family: var(--font-display); font-weight: 600; font-size: clamp(28px, 4.5vw, 46px);
+    margin: 0; line-height: 1.05; }
+  h1 em{ font-style: italic; color: var(--sprout); }
+  .sub{ color: var(--ink-dim); font-size: 14.5px; max-width: 640px; line-height: 1.6; }
+
+  .stats-row{ display:flex; gap: 26px; flex-wrap: wrap; margin-top: 4px; }
+  .stat{ display:flex; flex-direction: column; gap:2px; }
+  .stat .n{ font-family: var(--font-display); font-weight:600; font-size: 24px; color: var(--sprout); }
+  .stat .l{ font-size: 10.5px; color: var(--ink-faint); letter-spacing: 0.06em; text-transform: uppercase; }
+
+  .controls{ display:flex; gap: 12px; align-items:center; margin-top: 16px; flex-wrap: wrap; }
+  #search{ flex: 1; min-width: 200px; background: var(--card); border: 1px solid var(--gold-line);
+    color: var(--ink); padding: 11px 16px; border-radius: 999px; font-size: 14px; outline: none;
+    transition: border-color .2s; }
+  #search::placeholder{ color: var(--ink-faint); }
+  #search:focus{ border-color: var(--sprout-dim); }
+
+  .btn{ background: var(--sprout); color: #16220f; border:none; padding: 11px 20px; border-radius: 999px;
+    font-weight: 600; font-size: 14px; cursor:pointer; font-family: var(--font-body); transition: filter .15s, transform .15s; }
+  .btn:hover{ filter: brightness(1.08); transform: translateY(-1px); }
+  .btn.ghost{ background: transparent; color: var(--ink-dim); border: 1px solid var(--gold-line); }
+  .btn.ghost:hover{ color: var(--ink); border-color: var(--sprout-dim); }
+  .btn.small{ padding: 6px 14px; font-size: 12.5px; }
+  .btn.danger{ background: var(--rust); color: #2a1210; }
+  .btn:disabled{ opacity:.5; cursor:not-allowed; transform:none; }
+
+  .legend{ display:flex; gap: 14px; align-items:center; font-size: 11.5px; color: var(--ink-dim); flex-wrap: wrap; }
+  .legend span{ display:flex; align-items:center; gap:6px; }
+  .dot{ width:9px; height:9px; border-radius:50%; display:inline-block; }
+  .dot.ok{ background: var(--sprout-dim); } .dot.mid{ background: var(--amber); } .dot.low{ background: var(--rust); }
+
+  .util-row{ display:flex; gap: 8px; flex-wrap: wrap; }
+
+  /* ---------- Add-word panel ---------- */
+  #addPanel, #syncPanel, #photoPanel{
+    background: var(--card); border: 1px solid var(--gold-line); border-radius: var(--radius-card);
+    padding: 20px; margin-bottom: 30px; display:none;
+  }
+  #addPanel.open, #syncPanel.open, #photoPanel.open{ display:block; }
+  #addPanel h3, #syncPanel h3, #photoPanel h3{ margin: 0 0 14px; font-family: var(--font-display); font-size: 18px; font-weight:600; }
+  .form-grid{ display:grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; }
+  .field{ display:flex; flex-direction:column; gap: 5px; }
+  .field label{ font-size: 11px; color: var(--ink-faint); letter-spacing: 0.03em; }
+  .field input, .field select, .field textarea{
+    background: var(--bg-2); border: 1px solid var(--gold-line); color: var(--ink);
+    padding: 9px 11px; border-radius: 8px; font-family: var(--font-body); font-size: 13.5px; outline:none;
+  }
+  .field textarea{ resize: vertical; min-height: 38px; font-family: inherit; }
+  .field input:focus, .field select:focus, .field textarea:focus{ border-color: var(--sprout-dim); }
+  .field.span2{ grid-column: span 2; }
+  @media (max-width: 560px){ .field.span2{ grid-column: span 1; } }
+  .form-actions{ display:flex; gap: 10px; margin-top: 16px; justify-content: flex-end; align-items:center; }
+  .form-msg{ font-size: 12.5px; color: var(--sprout); margin-right:auto; }
+
+  .sync-code-display{ display:flex; align-items:center; gap:10px; background:var(--bg-2);
+    border:1px solid var(--gold-line); border-radius:10px; padding: 12px 16px; margin-bottom:14px; }
+  .sync-code-display .code{ font-family: var(--font-mono); font-size:18px; letter-spacing:0.05em; color:var(--sprout); }
+  .sync-note{ font-size:12.5px; color:var(--ink-dim); line-height:1.6; margin-bottom:14px; }
+  .sync-note b{ color: var(--amber); }
+
+  #photo-choose{ font-size: 13px; padding: 9px 18px; }
+  #photo-preview{ display:block; }
+
+  .review-row{ background: var(--bg-2); border: 1px solid var(--gold-line); border-radius: 10px;
+    padding: 12px; margin-top: 10px; }
+  .review-row .form-grid{ margin-bottom: 6px; }
+  .review-row-head{ display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; }
+  .review-row-head span{ font-size: 11px; color: var(--ink-faint); font-family: var(--font-mono); }
+  .review-empty{ color: var(--ink-faint); font-size: 13px; padding: 14px 0; text-align:center; }
+  .spinner{ display:inline-block; width:12px; height:12px; border-radius:50%;
+    border: 2px solid var(--ink-faint); border-top-color: var(--sprout); animation: spin 0.7s linear infinite; margin-right:6px; vertical-align:-1px; }
+  @keyframes spin{ to{ transform: rotate(360deg); } }
+
+  /* ---------- Grid of root cards ---------- */
+  #grid{ display:grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 22px; align-items: start; }
+  .card{ background: var(--card); border: 1px solid var(--gold-line); border-radius: var(--radius-card);
+    padding: 18px 16px 16px; transition: border-color .25s, background .25s; display:flex; flex-direction:column; }
+  .card:hover{ border-color: var(--sprout-dim); background: var(--card-hover); }
+  .card.big{ grid-column: span 2; }
+  @media (max-width: 640px){ .card.big{ grid-column: span 1; } }
+  .card-head{ display:flex; justify-content: space-between; align-items:flex-start; gap:8px; margin-bottom: 6px; }
+  .root-date{ font-family: var(--font-mono); font-size: 10.5px; color: var(--ink-faint); white-space: nowrap; padding-top: 2px; }
+  .word-count{ font-family: var(--font-mono); font-size: 10.5px; color: var(--sprout-dim); }
+
+  .diagram-wrap{ width: 100%; display:flex; justify-content:center; }
+  svg.diagram{ width: 100%; height: auto; overflow: visible; }
+  .node-root rect{ fill: #22301f; stroke: var(--sprout); stroke-width: 1.3; }
+  .node-root text{ fill: var(--sprout); font-family: var(--font-display); font-weight: 600; }
+  .link{ stroke: var(--gold-line); stroke-width: 1.2; }
+  .node-word rect{ fill: var(--bg-2); stroke: var(--ink-faint); stroke-width: 1; cursor: pointer; transition: stroke .15s, fill .15s; }
+  .node-word:hover rect, .node-word.active rect{ fill: #263626; stroke: var(--sprout); }
+  .node-word.mastery-mid rect{ stroke: var(--amber); }
+  .node-word.mastery-low rect{ stroke: var(--rust); }
+  .node-word .w{ fill: var(--ink); font-family: var(--font-body); font-weight: 600; cursor: pointer; }
+  .node-word .m{ fill: var(--ink-faint); font-family: var(--font-body); font-weight: 400; cursor: pointer; }
+
+  .detail{ margin-top: 12px; padding-top: 12px; border-top: 1px dashed var(--gold-line); min-height: 54px; font-size: 13px; line-height: 1.55; }
+  .detail .dw{ font-family: var(--font-display); font-weight: 600; font-size: 16px; color: var(--sprout); margin-right: 6px; }
+  .detail .dp{ font-size: 11px; color: var(--ink-faint); font-family: var(--font-mono); }
+  .detail .dm{ color: var(--ink); }
+  .detail .db{ display:block; margin-top: 4px; font-family: var(--font-mono); font-size: 11.5px; color: var(--sprout-dim); }
+  .detail .de{ display:block; margin-top: 4px; color: var(--ink-dim); font-style: italic; }
+  .detail .ph{ color: var(--ink-faint); font-style: italic; }
+  .detail .drow{ display:flex; justify-content: space-between; align-items:flex-start; gap: 10px; }
+  .detail .dactions{ display:flex; gap: 6px; flex-shrink:0; }
+  .mastery-chip{ display:inline-block; padding: 2px 9px; border-radius: 999px; font-size: 10.5px;
+    font-family: var(--font-mono); cursor:pointer; border: 1px solid var(--ink-faint); color: var(--ink-dim); margin-left:6px; }
+  .mastery-chip.mid{ border-color: var(--amber); color: var(--amber); }
+  .mastery-chip.low{ border-color: var(--rust); color: var(--rust); }
+
+  #standalone-section{ margin-top: 50px; }
+  .section-head{ display:flex; align-items:baseline; gap:12px; margin-bottom: 18px; border-bottom: 1px solid var(--gold-line); padding-bottom: 12px; }
+  .section-head h2{ font-family: var(--font-display); font-weight:600; font-size: 21px; margin:0; }
+  .section-head .n{ font-size: 12px; color: var(--ink-faint); font-family: var(--font-mono); }
+  .leaf-grid{ display:grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 12px; }
+  .leaf{ background: var(--card); border: 1px solid var(--gold-line); border-left: 3px solid var(--ink-faint);
+    border-radius: 10px; padding: 12px 14px; cursor:pointer; }
+  .leaf.mastery-mid{ border-left-color: var(--amber); }
+  .leaf.mastery-low{ border-left-color: var(--rust); }
+  .leaf .lw{ font-family: var(--font-display); font-weight:600; font-size: 15px; }
+  .leaf .lp{ font-size: 10.5px; color: var(--ink-faint); font-family: var(--font-mono); margin-left: 6px; }
+  .leaf .lm{ font-size: 12.5px; color: var(--ink-dim); margin-top: 3px; }
+  .leaf .le{ font-size: 11px; color: var(--sprout-dim); margin-top: 5px; font-style: italic; }
+
+  footer{ margin-top: 60px; padding-top: 20px; border-top: 1px solid var(--gold-line); color: var(--ink-faint);
+    font-size: 11px; text-align:center; font-family: var(--font-mono); }
+  .hidden{ display:none !important; }
+  #toast{ position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(20px);
+    background: var(--sprout); color: #16220f; padding: 10px 20px; border-radius: 999px; font-size: 13px;
+    font-weight: 600; opacity: 0; pointer-events:none; transition: all .25s; z-index: 50; max-width: 90vw; text-align:center; }
+  #toast.show{ opacity: 1; transform: translateX(-50%) translateY(0); }
+  #toast.error{ background: var(--rust); color:#2a1210; }
+
+  /* ---------- Onboarding overlay ---------- */
+  #onboard{ position:fixed; inset:0; background: rgba(10,15,11,0.92); z-index:100;
+    display:flex; align-items:center; justify-content:center; padding: 20px; }
+  #onboard.hidden{ display:none; }
+  .onboard-box{ background: var(--card); border:1px solid var(--gold-line); border-radius: 20px;
+    padding: 32px 28px; max-width: 420px; width:100%; }
+  .onboard-box h2{ font-family: var(--font-display); font-size: 22px; margin: 0 0 10px; }
+  .onboard-box p{ color: var(--ink-dim); font-size: 13.5px; line-height:1.6; margin: 0 0 18px; }
+  .onboard-box input{ width:100%; background: var(--bg-2); border:1px solid var(--gold-line); color: var(--ink);
+    padding: 12px 14px; border-radius: 10px; font-size: 15px; font-family: var(--font-mono); outline:none; margin-bottom: 14px; }
+  .onboard-box input:focus{ border-color: var(--sprout-dim); }
+  .onboard-choice{ display:none; gap:10px; flex-direction:column; margin-top: 6px; }
+  .onboard-choice.show{ display:flex; }
+  .onboard-choice button{ width:100%; }
+</style>
+</head>
+<body>
+
+<div id="onboard">
+  <div class="onboard-box">
+    <h2>输入同步口令</h2>
+    <p>在你所有设备上输入<b>同一个口令</b>，就能看到同一份词表。第一次使用可以自己随便定一个（建议记一下，比如存进备忘录），比如：<code>xiaoming-2026</code></p>
+    <input id="ob-code" type="text" placeholder="设一个只有你知道的口令" autocomplete="off">
+    <button class="btn" id="ob-continue" style="width:100%;">继续</button>
+    <div class="onboard-choice" id="ob-choice">
+      <p style="margin:10px 0 0;">这个口令下还没有数据，怎么开始？</p>
+      <button class="btn" id="ob-seed">从内置默认词表开始（292 词）</button>
+      <button class="btn ghost" id="ob-empty">从空白开始</button>
+    </div>
+  </div>
+</div>
+
+<div class="wrap">
+
+  <header>
+    <div class="eyebrow">
+      <span>Root System · 词根词缀记忆图谱</span>
+      <span class="sync-status" id="syncStatus" title="点击查看同步设置">
+        <i class="sync-dot" id="syncDot"></i><span id="syncLabel">同步中</span>
+      </span>
+    </div>
+    <h1>每个词根，都是一条<em>地下茎</em></h1>
+    <div class="sub">词根居中，派生词像新芽一样向外生长。输入同一个口令，任何设备打开都是同一份数据。</div>
+    <div class="stats-row">
+      <div class="stat"><span class="n" id="stat-groups">–</span><span class="l">词根家族</span></div>
+      <div class="stat"><span class="n" id="stat-words">–</span><span class="l">收录单词</span></div>
+      <div class="stat"><span class="n" id="stat-dates">–</span><span class="l">记录天数</span></div>
+    </div>
+    <div class="controls">
+      <input id="search" type="text" placeholder="搜索词根 / 单词 / 释义 …">
+      <div class="util-row">
+        <button class="btn" id="toggleAdd">+ 录入新词</button>
+        <button class="btn ghost small" id="togglePhoto">📷 拍照识别导入</button>
+        <button class="btn ghost small" id="btnExport">导出备份</button>
+        <button class="btn ghost small" id="btnImportTrigger">导入备份</button>
+        <input type="file" id="btnImport" accept="application/json" style="display:none;">
+      </div>
+      <div class="legend">
+        <span><i class="dot ok"></i>已掌握</span>
+        <span><i class="dot mid"></i>△ 印象模糊</span>
+        <span><i class="dot low"></i>✗ 需重点复习</span>
+      </div>
+    </div>
+  </header>
+
+  <div id="syncPanel">
+    <h3>同步设置</h3>
+    <div class="sync-code-display">
+      <span style="color:var(--ink-faint); font-size:12.5px;">当前口令</span>
+      <span class="code" id="currentCodeDisplay">–</span>
+      <button class="btn ghost small" id="copyCode">复制</button>
+    </div>
+    <div class="sync-note">在另一台设备上打开这个网址，输入<b>一模一样</b>的口令，就能看到同一份数据。口令类似"暗号"，请勿把它当作真正的账号密码使用。</div>
+    <div class="form-actions">
+      <button class="btn ghost small" id="btnRestoreDefault">恢复 / 合并默认词表</button>
+      <button class="btn danger small" id="btnSwitchCode">更换口令（切换到另一份数据）</button>
+      <button class="btn ghost small" id="closeSyncPanel">关闭</button>
+    </div>
+  </div>
+
+  <div id="addPanel">
+    <h3>录入新词</h3>
+    <div class="form-grid">
+      <div class="field">
+        <label>日期</label>
+        <input id="f-date" type="text" placeholder="如 7/22">
+      </div>
+      <div class="field span2">
+        <label>词根组（留空 = 独立词，无共享词根）</label>
+        <input id="f-root" list="rootList" placeholder="如 tail · tom = cut（切）">
+        <datalist id="rootList"></datalist>
+      </div>
+      <div class="field">
+        <label>掌握度</label>
+        <select id="f-mastery">
+          <option value="">已掌握</option>
+          <option value="△">△ 印象模糊</option>
+          <option value="✗">✗ 需重点复习</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>单词 *</label>
+        <input id="f-word" placeholder="如 retail">
+      </div>
+      <div class="field">
+        <label>词性</label>
+        <input id="f-pos" placeholder="如 n./v.">
+      </div>
+      <div class="field span2">
+        <label>释义 *</label>
+        <input id="f-meaning" placeholder="如 零售">
+      </div>
+      <div class="field span2">
+        <label>拆解</label>
+        <input id="f-breakdown" placeholder="如 re+tail(切)">
+      </div>
+      <div class="field span2">
+        <label>例句 / 搭配</label>
+        <textarea id="f-example" placeholder="可选"></textarea>
+      </div>
+    </div>
+    <div class="form-actions">
+      <span class="form-msg" id="formMsg"></span>
+      <button class="btn ghost small" id="cancelAdd">取消</button>
+      <button class="btn small" id="submitAdd">保存</button>
+    </div>
+  </div>
+
+  <div id="photoPanel">
+    <h3>拍照识别导入</h3>
+    <div class="sync-note">拍一页手写笔记（一次一页效果最好，光线均匀、别斜拍），AI 会识别成单词条目，你确认无误后再批量导入，不会自动跳过这一步。</div>
+    <div id="photo-upload-zone">
+      <input type="file" id="photo-input" accept="image/*" capture="environment" style="display:none;">
+      <button class="btn" id="photo-choose">选择 / 拍摄照片</button>
+      <span id="photo-filename" style="font-size:12.5px;color:var(--ink-faint);margin-left:10px;"></span>
+    </div>
+    <img id="photo-preview" style="display:none; max-width:220px; border-radius:10px; margin-top:12px; border:1px solid var(--gold-line);">
+    <div class="form-actions" style="margin-top:14px;">
+      <span class="form-msg" id="photoMsg"></span>
+      <button class="btn ghost small" id="photoCancel">关闭</button>
+      <button class="btn small" id="photoRecognize" disabled>开始识别</button>
+    </div>
+    <div id="photoReview"></div>
+  </div>
+
+  <main id="grid"></main>
+
+  <section id="standalone-section">
+    <div class="section-head"><h2>独立词 · No Shared Root</h2><span class="n" id="standalone-count"></span></div>
+    <div class="leaf-grid" id="leafGrid"></div>
+  </section>
+
+  <footer>数据保存在云端（按同步口令区分）· 断网时仍可查看最近一次同步的内容</footer>
+</div>
+
+<div id="toast"></div>
+
+<!-- 本地文件，不依赖 esm.sh（国内经常连不上）。见部署说明.md 里"如何获取 supabase.js" -->
+<script src="supabase.js"></script>
+<script>
+// ============================================================
+// 部署前必须填写这两项（在 Supabase 项目 Settings → API 里能找到）
+// ============================================================
+const SUPABASE_URL = 'https://xevgkmbjgbqddxtjcerx.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhldmdrbWJqZ2JxZGR4dGpjZXJ4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ3MTExNTMsImV4cCI6MjEwMDI4NzE1M30.7AD0DERqTyoQFrzBZeoEoI0p3arlNf1ecVekbDel_D4';
+// ============================================================
+
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+const SEED = [{"id": "1", "date": "6/21", "root": "tail · tom = cut（切）", "mastery": "", "word": "retail", "pos": "n./v.", "meaning": "零售", "breakdown": "re+tail(切)", "example": ""}, {"id": "2", "date": "6/21", "root": "tail · tom = cut（切）", "mastery": "", "word": "wholesale", "pos": "n./adj.", "meaning": "批发", "breakdown": "whole+sale", "example": ""}, {"id": "3", "date": "6/21", "root": "tail · tom = cut（切）", "mastery": "", "word": "retailer", "pos": "n.", "meaning": "零售商", "breakdown": "retail+er", "example": ""}, {"id": "4", "date": "6/21", "root": "tail · tom = cut（切）", "mastery": "", "word": "detail", "pos": "n.", "meaning": "细节", "breakdown": "de(向下)+tail(切)", "example": ""}, {"id": "5", "date": "6/21", "root": "tail · tom = cut（切）", "mastery": "", "word": "entail", "pos": "v.", "meaning": "使必要；牵涉到", "breakdown": "en(使)+tail(切)", "example": ""}, {"id": "6", "date": "6/21", "root": "tail · tom = cut（切）", "mastery": "", "word": "atom", "pos": "n.", "meaning": "原子（不可再切）", "breakdown": "a(不)+tom(切)", "example": ""}, {"id": "7", "date": "6/21", "root": "tail · tom = cut（切）", "mastery": "", "word": "atomic", "pos": "adj.", "meaning": "原子的", "breakdown": "atom+ic", "example": "~ power；~ bomb"}, {"id": "8", "date": "6/21", "root": "tail · tom = cut（切）", "mastery": "", "word": "anatomy", "pos": "n.", "meaning": "解剖学", "breakdown": "ana(分开)+tom(切)", "example": ""}, {"id": "9", "date": "6/21", "root": "a- = 不 / 否定", "mastery": "", "word": "atypical", "pos": "adj.", "meaning": "不典型的", "breakdown": "a(不)+typical", "example": ""}, {"id": "10", "date": "6/21", "root": "spite = malice（恶意）", "mastery": "", "word": "spite", "pos": "n.", "meaning": "怨恨；恶意", "breakdown": "", "example": "out of spite = 出于报复"}, {"id": "11", "date": "6/21", "root": "faith = 信（信任 / 信仰）", "mastery": "", "word": "faith", "pos": "n.", "meaning": "信任；信仰；诚意", "breakdown": "", "example": "faith in sb."}, {"id": "12", "date": "6/21", "root": "faith = 信（信任 / 信仰）", "mastery": "△", "word": "faithful", "pos": "adj.", "meaning": "忠诚的；忠实的", "breakdown": "faith+ful", "example": ""}, {"id": "13", "date": "6/21", "root": "it = go（行 / 走）", "mastery": "", "word": "initiative", "pos": "n.", "meaning": "主动性；倡议；主动权", "breakdown": "init(走/始)+ive", "example": ""}, {"id": "14", "date": "6/21", "root": "it = go（行 / 走）", "mastery": "△", "word": "initiate", "pos": "v.", "meaning": "开始；启动", "breakdown": "init+iate", "example": ""}, {"id": "15", "date": "6/21", "root": "pot = power（力量）", "mastery": "", "word": "potent", "pos": "adj.", "meaning": "强效的；强有力的", "breakdown": "pot(力)+ent", "example": ""}, {"id": "16", "date": "6/21", "root": "lim = 界限 / 限制", "mastery": "", "word": "limit", "pos": "n./v.", "meaning": "限制；管制", "breakdown": "lim(界限)", "example": ""}, {"id": "17", "date": "6/21", "root": "lim = 界限 / 限制", "mastery": "", "word": "limitation", "pos": "n.", "meaning": "限制（性的事物）", "breakdown": "limit+ation", "example": ""}, {"id": "18", "date": "6/21", "root": "lim = 界限 / 限制", "mastery": "", "word": "limited", "pos": "adj.", "meaning": "有限的；少的", "breakdown": "limit+ed", "example": "His IQ is rather limited."}, {"id": "19", "date": "6/21", "root": "lim = 界限 / 限制", "mastery": "", "word": "eliminate", "pos": "v.", "meaning": "排除；消灭；淘汰", "breakdown": "e(ex=向外)+limin(门槛)", "example": ""}, {"id": "20", "date": "6/21", "root": "lim = 界限 / 限制", "mastery": "✗", "word": "preliminary", "pos": "adj./n.", "meaning": "预备的；初步的；预赛", "breakdown": "pre(前)+limin+ary", "example": "PET = Preliminary English Test"}, {"id": "21", "date": "6/21", "root": "pro + fess = 在前 + 说", "mastery": "", "word": "professor", "pos": "n.", "meaning": "教授", "breakdown": "pro(前)+fess(说)", "example": ""}, {"id": "22", "date": "6/21", "root": "pro + fess = 在前 + 说", "mastery": "", "word": "professional", "pos": "adj./n.", "meaning": "职业的；专业的；专业人士", "breakdown": "profess+ional", "example": ""}, {"id": "23", "date": "6/21", "root": "pro + fess = 在前 + 说", "mastery": "", "word": "profession", "pos": "n.", "meaning": "职业；行业", "breakdown": "profess+ion", "example": ""}, {"id": "24", "date": "6/21", "root": "con + fess = 一起 + 说", "mastery": "✗", "word": "confess", "pos": "v.", "meaning": "坦白；承认", "breakdown": "con(一起)+fess(说)", "example": "confess to doing"}, {"id": "25", "date": "6/21", "root": "man = 手", "mastery": "", "word": "manifest", "pos": "v./adj./n.", "meaning": "表露；显现；（货物）清单", "breakdown": "man(手)+i+fest", "example": ""}, {"id": "26", "date": "6/21", "root": "pro + phe = 在前 + 说（预言）", "mastery": "", "word": "prophesy", "pos": "v.", "meaning": "预言", "breakdown": "pro(前)+phe(说)", "example": ""}, {"id": "27", "date": "6/21", "root": "pro + phe = 在前 + 说（预言）", "mastery": "", "word": "prophecy", "pos": "n.", "meaning": "预言", "breakdown": "prophesy 的名词形式", "example": ""}, {"id": "28", "date": "6/21", "root": "pro + phe = 在前 + 说（预言）", "mastery": "", "word": "prophet", "pos": "n.", "meaning": "先知；预言者", "breakdown": "", "example": ""}, {"id": "29", "date": "6/21", "root": "pro + phe = 在前 + 说（预言）", "mastery": "", "word": "foretell≈ prophesy", "pos": "v.", "meaning": "预言；预示", "breakdown": "fore(预先)+tell(说)", "example": ""}, {"id": "30", "date": "6/21", "root": "ally = 粘合 / 结合", "mastery": "", "word": "alloy", "pos": "n.", "meaning": "合金", "breakdown": "al+loy(粘合)", "example": ""}, {"id": "31", "date": "6/21", "root": "league = 联盟", "mastery": "", "word": "league", "pos": "n.", "meaning": "同盟；联盟", "breakdown": "", "example": "LOL = League of Legends"}, {"id": "32", "date": "6/21", "root": "ambl = 走（漫走）", "mastery": "", "word": "preamble", "pos": "n.", "meaning": "前言；绪言", "breakdown": "pre(前)+amble(走)", "example": ""}, {"id": "33", "date": "6/21", "root": "ambl = 走（漫走）", "mastery": "", "word": "ramble", "pos": "v.", "meaning": "漫游；漫步；漫谈", "breakdown": "r+amble(走)", "example": ""}, {"id": "34", "date": "6/21", "root": "ambl = 走（漫走）", "mastery": "", "word": "rambling", "pos": "adj./v.", "meaning": "（说话/写作）杂乱无章；漫无边际", "breakdown": "ramble+ing", "example": ""}, {"id": "35", "date": "6/21", "root": "not(e) = 标记 / 注意", "mastery": "", "word": "note", "pos": "n./v.", "meaning": "笔记；注意，留意", "breakdown": "", "example": ""}, {"id": "36", "date": "6/21", "root": "not(e) = 标记 / 注意", "mastery": "", "word": "notice", "pos": "v./n.", "meaning": "注意", "breakdown": "note+ice", "example": ""}, {"id": "37", "date": "6/21", "root": "not(e) = 标记 / 注意", "mastery": "", "word": "noticeable", "pos": "adj.", "meaning": "明显的；显著的", "breakdown": "notice+able(能/易)", "example": ""}, {"id": "38", "date": "6/21", "root": "not(e) = 标记 / 注意", "mastery": "", "word": "notable", "pos": "adj.", "meaning": "著名的；值得注意的", "breakdown": "note+able", "example": ""}, {"id": "39", "date": "6/21", "root": "not(e) = 标记 / 注意", "mastery": "", "word": "notify", "pos": "v.", "meaning": "通知（使知道）", "breakdown": "note+fy(使)", "example": ""}, {"id": "40", "date": "6/21", "root": "not(e) = 标记 / 注意", "mastery": "", "word": "noteworthy", "pos": "adj.", "meaning": "值得注意的", "breakdown": "note+worthy(值得)", "example": ""}, {"id": "41", "date": "6/21", "root": "not(e) = 标记 / 注意", "mastery": "", "word": "notorious", "pos": "adj.", "meaning": "臭名昭著的", "breakdown": "", "example": ""}, {"id": "42", "date": "6/21", "root": "not(e) = 标记 / 注意", "mastery": "", "word": "notion", "pos": "n.", "meaning": "概念；观念", "breakdown": "", "example": ""}, {"id": "43", "date": "6/21", "root": "hind = 后", "mastery": "", "word": "behind", "pos": "prep./adv.", "meaning": "在…后面", "breakdown": "be+hind(后)", "example": "hind legs = 后腿"}, {"id": "44", "date": "6/21", "root": "hind = 后", "mastery": "", "word": "hind", "pos": "adj.", "meaning": "在后面的", "breakdown": "", "example": ""}, {"id": "45", "date": "6/21", "root": "hind = 后", "mastery": "", "word": "hinder", "pos": "v.", "meaning": "阻碍；拖延", "breakdown": "hind+er", "example": "hinder sb. from sth."}, {"id": "46", "date": "6/21", "root": "art = 技艺 / 人工", "mastery": "", "word": "artificial", "pos": "adj.", "meaning": "人工的；人造的", "breakdown": "art(人工)+ific+ial", "example": ""}, {"id": "47", "date": "6/21", "root": "art = 技艺 / 人工", "mastery": "✗", "word": "artisan", "pos": "n.", "meaning": "工匠", "breakdown": "art+isan", "example": ""}, {"id": "48", "date": "6/21", "root": "art = 技艺 / 人工", "mastery": "", "word": "craftsman≈ artisan", "pos": "n.", "meaning": "工匠", "breakdown": "craft+s+man", "example": ""}, {"id": "49", "date": "6/21", "root": "sub=向下\nsist / stit = 站立", "mastery": "", "word": "subsist", "pos": "v.", "meaning": "维持生存", "breakdown": "sub(下)+sist(站立)", "example": ""}, {"id": "50", "date": "6/21", "root": "sub=向下\nsist / stit = 站立", "mastery": "", "word": "destitute", "pos": "adj.", "meaning": "一贫如洗的；贫困的", "breakdown": "de+stit(站立)+ute", "example": ""}, {"id": "51", "date": "6/21", "root": "sub=向下\nsist / stit = 站立", "mastery": "", "word": "substance", "pos": "n.", "meaning": "物质；实质", "breakdown": "sub+stance(站)", "example": ""}, {"id": "52", "date": "6/21", "root": "sub=向下\nsist / stit = 站立", "mastery": "", "word": "substantial", "pos": "adj.", "meaning": "大量的；重要的；实质的", "breakdown": "substance+ial", "example": ""}, {"id": "53", "date": "6/21", "root": "sub=向下\nsist / stit = 站立", "mastery": "", "word": "considerable\n≈ substantial", "pos": "adj.", "meaning": "相当大的；可观的", "breakdown": "con+sider+able", "example": ""}, {"id": "54", "date": "6/21", "root": "pro = 在前（贬）", "mastery": "", "word": "prostitute", "pos": "n.", "meaning": "娼妓；妓女", "breakdown": "pro+stit(站立)+ute", "example": ""}, {"id": "55", "date": "6/21", "root": "pro = 在前（贬）", "mastery": "", "word": "prostitution（正式）", "pos": "n.", "meaning": "卖淫", "breakdown": "prostitute+ion", "example": ""}, {"id": "56", "date": "6/21", "root": "pro = 在前（贬）", "mastery": "", "word": "whore（口语）", "pos": "n.", "meaning": "妓女（粗俗）", "breakdown": "", "example": ""}, {"id": "57", "date": "6/21", "root": "super = over（超 / 在上）", "mastery": "", "word": "superstitious", "pos": "adj.", "meaning": "迷信的", "breakdown": "super(超)+stit(站)+ious", "example": ""}, {"id": "58", "date": "6/21", "root": "super = over（超 / 在上）", "mastery": "", "word": "superstition", "pos": "n.", "meaning": "迷信", "breakdown": "", "example": ""}, {"id": "59", "date": "6/21", "root": "poor / en-em-im = 贫 / 使", "mastery": "", "word": "poverty", "pos": "n.", "meaning": "贫穷", "breakdown": "poor+ty", "example": ""}, {"id": "60", "date": "6/21", "root": "poor / en-em-im = 贫 / 使", "mastery": "", "word": "impoverish", "pos": "v.", "meaning": "使贫困", "breakdown": "im(使)+poverish(变穷)", "example": ""}, {"id": "61", "date": "6/18", "root": "grand · grant（大 / 给予）", "mastery": "", "word": "grand", "pos": "adj.", "meaning": "宏伟的；壮丽的；盛大的", "breakdown": "grand(大)", "example": "a grand building / celebration"}, {"id": "62", "date": "6/18", "root": "grand · grant（大 / 给予）", "mastery": "", "word": "grant", "pos": "v./n.", "meaning": "授予；拨款；（正式）承认", "breakdown": "", "example": "take … for granted = 视为理所当然；\nI grant that…我承认"}, {"id": "63", "date": "6/18", "root": "vary = 变 / 不同", "mastery": "", "word": "vary", "pos": "v.", "meaning": "变化；不同", "breakdown": "", "example": ""}, {"id": "64", "date": "6/18", "root": "vary = 变 / 不同", "mastery": "", "word": "variety", "pos": "n.", "meaning": "种类；多样性", "breakdown": "vary+ety", "example": ""}, {"id": "65", "date": "6/18", "root": "vary = 变 / 不同", "mastery": "", "word": "various", "pos": "adj.", "meaning": "各种各样的", "breakdown": "vary+ous", "example": ""}, {"id": "66", "date": "6/18", "root": "vary = 变 / 不同", "mastery": "", "word": "variation", "pos": "n.", "meaning": "变化；变种", "breakdown": "vary+ation", "example": "（level / amount）"}, {"id": "67", "date": "6/18", "root": "vary = 变 / 不同", "mastery": "", "word": "variable", "pos": "adj./n.", "meaning": "易变的 / 变量", "breakdown": "vary+able(能/易)", "example": "interest rate can be highly variable；（数学）变量"}, {"id": "68", "date": "6/18", "root": "vary = 变 / 不同", "mastery": "", "word": "varied", "pos": "adj.", "meaning": "各种各样的；多变的", "breakdown": "vary+ed", "example": ""}, {"id": "69", "date": "6/18", "root": "vary = 变 / 不同", "mastery": "", "word": "invariable", "pos": "adj.", "meaning": "始终不变的", "breakdown": "in(不)+variable", "example": ""}, {"id": "70", "date": "6/18", "root": "syn = sym = same（同）", "mastery": "", "word": "synthesis", "pos": "n.", "meaning": "合成；综合", "breakdown": "syn(同)+thesis(放)", "example": "a synthesis of sound and engineering"}, {"id": "71", "date": "6/18", "root": "syn = sym = same（同）", "mastery": "", "word": "synthetic", "pos": "adj.", "meaning": "合成的；人造的", "breakdown": "syn+thetic", "example": ""}, {"id": "72", "date": "6/18", "root": "syn = sym = same（同）", "mastery": "", "word": "analysis", "pos": "n.", "meaning": "分析", "breakdown": "ana(分开)+lysis(松解)", "example": ""}, {"id": "73", "date": "6/18", "root": "syn = sym = same（同）", "mastery": "", "word": "photosynthesis", "pos": "n.", "meaning": "光合作用", "breakdown": "photo(光)+synthesis", "example": ""}, {"id": "74", "date": "6/18", "root": "syn = sym = same（同）", "mastery": "", "word": "photon", "pos": "n.", "meaning": "光子", "breakdown": "photo(光)+on", "example": ""}, {"id": "75", "date": "6/18", "root": "per = through\nann · enn = 年", "mastery": "", "word": "perennial", "pos": "adj.", "meaning": "长久的；常年的；多年生的", "breakdown": "per(穿过)+enn(年)", "example": ""}, {"id": "76", "date": "6/18", "root": "per = through\nann · enn = 年", "mastery": "", "word": "anniversary", "pos": "n.", "meaning": "纪念日", "breakdown": "ann(年)+vers+ary", "example": ""}, {"id": "77", "date": "6/18", "root": "per = through\nann · enn = 年", "mastery": "", "word": "annals", "pos": "n.", "meaning": "编年史；年鉴", "breakdown": "ann(年)+als", "example": "in the annals of crime（在犯罪史上）"}, {"id": "78", "date": "6/18", "root": "per = through\nann · enn = 年", "mastery": "", "word": "permanent", "pos": "adj.", "meaning": "永久的；永恒的", "breakdown": "per+man+ent", "example": ""}, {"id": "79", "date": "6/18", "root": "per = through\nann · enn = 年", "mastery": "", "word": "annual", "pos": "adj.", "meaning": "一年一度的；每年的", "breakdown": "ann(年)+ual", "example": "annual report / meeting；annual ring（年轮）"}, {"id": "80", "date": "6/18", "root": "per = through\nann · enn = 年", "mastery": "", "word": "annually", "pos": "adv.", "meaning": "一年一度地；每年", "breakdown": "annual+ly", "example": ""}, {"id": "81", "date": "6/18", "root": "per = through\nann · enn = 年", "mastery": "", "word": "millennium", "pos": "n.", "meaning": "一千年；千年", "breakdown": "mille(千)+enn(年)", "example": "（mille = 1000）"}, {"id": "82", "date": "6/18", "root": "grade = 等级 / 台阶", "mastery": "", "word": "degrade", "pos": "v.", "meaning": "贬低；使降级；降解", "breakdown": "de(下)+grade(级)", "example": "degrade yourself；loss of status / self-respect"}, {"id": "83", "date": "6/18", "root": "grade = 等级 / 台阶", "mastery": "", "word": "grade", "pos": "n./v.", "meaning": "等级；年级；评分", "breakdown": "", "example": "best grade of tea；high / low grade"}, {"id": "84", "date": "6/18", "root": "grade = 等级 / 台阶", "mastery": "", "word": "graduate", "pos": "v./n.", "meaning": "毕业；毕业生", "breakdown": "grad+uate", "example": ""}, {"id": "85", "date": "6/18", "root": "grade = 等级 / 台阶", "mastery": "", "word": "graduation", "pos": "n.", "meaning": "毕业；毕业典礼", "breakdown": "graduate+ion", "example": ""}, {"id": "86", "date": "6/18", "root": "grade = 等级 / 台阶", "mastery": "", "word": "undergraduate", "pos": "n.", "meaning": "本科生（在读大学生）", "breakdown": "under+graduate", "example": ""}, {"id": "87", "date": "6/18", "root": "grade = 等级 / 台阶", "mastery": "", "word": "postgraduate", "pos": "n.", "meaning": "研究生", "breakdown": "post(后)+graduate", "example": "post-war（战后）"}, {"id": "88", "date": "6/18", "root": "grade = 等级 / 台阶", "mastery": "", "word": "centigrade", "pos": "n./adj.", "meaning": "摄氏度", "breakdown": "centi(百)+grade", "example": ""}, {"id": "89", "date": "6/18", "root": "grade = 等级 / 台阶", "mastery": "", "word": "upgrade ≈ update", "pos": "v./n.", "meaning": "升级；提升", "breakdown": "up+grade", "example": ""}, {"id": "90", "date": "6/18", "root": "pos = to put（放）", "mastery": "", "word": "compose", "pos": "v.", "meaning": "组成；作曲；写（信 / 稿）", "breakdown": "com(一起)+pos(放)", "example": "be composed of…（由…组成）"}, {"id": "91", "date": "6/18", "root": "pos = to put（放）", "mastery": "", "word": "composer", "pos": "n.", "meaning": "作曲家", "breakdown": "compose+er", "example": ""}, {"id": "92", "date": "6/18", "root": "pos = to put（放）", "mastery": "", "word": "composition", "pos": "n.", "meaning": "作品；构成；作文", "breakdown": "compose+ition", "example": ""}, {"id": "93", "date": "6/18", "root": "pos = to put（放）", "mastery": "", "word": "deposit", "pos": "v./n.", "meaning": "存（款）；押金；沉淀", "breakdown": "de(下)+pos(放)", "example": ""}, {"id": "94", "date": "6/18", "root": "pos = to put（放）", "mastery": "", "word": "dispose", "pos": "v.", "meaning": "处理；处置（of）", "breakdown": "dis(离)+pos(放)", "example": ""}, {"id": "95", "date": "6/18", "root": "pos = to put（放）", "mastery": "", "word": "disposition", "pos": "n.", "meaning": "性情；倾向；布置", "breakdown": "dispose+ition", "example": ""}, {"id": "96", "date": "6/18", "root": "pos = to put（放）", "mastery": "", "word": "disposed", "pos": "adj.", "meaning": "有…倾向的", "breakdown": "dispose+ed", "example": ""}, {"id": "97", "date": "6/18", "root": "pos = to put（放）", "mastery": "", "word": "disposal", "pos": "n.", "meaning": "处理；处置", "breakdown": "dispose+al", "example": ""}, {"id": "98", "date": "6/18", "root": "pos = to put（放）", "mastery": "", "word": "disposable", "pos": "adj.", "meaning": "一次性的", "breakdown": "dispose+able", "example": ""}, {"id": "99", "date": "6/18", "root": "pos = to put（放）", "mastery": "", "word": "position", "pos": "n.", "meaning": "位置；姿势；处境", "breakdown": "pos(放)+ition", "example": "in good / the same / one's position"}, {"id": "100", "date": "6/18", "root": "pos = to put（放）", "mastery": "", "word": "expose", "pos": "v.", "meaning": "暴露；揭露", "breakdown": "ex(向外)+pos(放)", "example": "expose = reveal"}, {"id": "101", "date": "6/18", "root": "pos = to put（放）", "mastery": "", "word": "exposure", "pos": "n.", "meaning": "暴露；曝光", "breakdown": "expose+ure", "example": ""}, {"id": "102", "date": "6/18", "root": "pos = to put（放）", "mastery": "", "word": "exposed", "pos": "adj.", "meaning": "无遮蔽的；暴露的", "breakdown": "expose+ed", "example": ""}, {"id": "103", "date": "6/18", "root": "pos = to put（放）", "mastery": "", "word": "conceal ↔ reveal", "pos": "v.", "meaning": "隐藏；隐瞒", "breakdown": "con+ceal", "example": "（reveal 的反义）"}, {"id": "104", "date": "6/18", "root": "rupt = break（断）", "mastery": "", "word": "interrupt", "pos": "v.", "meaning": "打断；中断", "breakdown": "inter(中间)+rupt(断)", "example": ""}, {"id": "105", "date": "6/18", "root": "rupt = break（断）", "mastery": "", "word": "disrupt", "pos": "v.", "meaning": "扰乱；中断", "breakdown": "dis+rupt(断)", "example": ""}, {"id": "106", "date": "6/20", "root": "trem · trep = 颤抖（发抖）", "mastery": "", "word": "shiver", "pos": "v./n.", "meaning": "（因寒冷 / 恐惧）发抖；颤抖", "breakdown": "", "example": ""}, {"id": "107", "date": "6/20", "root": "trem · trep = 颤抖（发抖）", "mastery": "", "word": "quiver", "pos": "v.", "meaning": "颤抖；微颤", "breakdown": "", "example": ""}, {"id": "108", "date": "6/20", "root": "trem · trep = 颤抖（发抖）", "mastery": "", "word": "tremble", "pos": "v.", "meaning": "发抖；颤抖", "breakdown": "trem(抖)", "example": ""}, {"id": "109", "date": "6/20", "root": "trem · trep = 颤抖（发抖）", "mastery": "", "word": "tremendous", "pos": "adj.", "meaning": "巨大的；极好的", "breakdown": "trem(抖)+endous", "example": "（大到令人颤抖）"}, {"id": "110", "date": "6/20", "root": "trem · trep = 颤抖（发抖）", "mastery": "", "word": "intrepid", "pos": "adj.", "meaning": "无畏的；勇敢的", "breakdown": "in(不)+trep(抖)", "example": ""}, {"id": "111", "date": "6/20", "root": "trem · trep = 颤抖（发抖）", "mastery": "", "word": "trepidation", "pos": "n.", "meaning": "恐惧；惶恐；惴惴不安", "breakdown": "trep(抖)+idation", "example": ""}, {"id": "112", "date": "6/20", "root": "test = 见证 / 证明", "mastery": "", "word": "contest", "pos": "n./v.", "meaning": "比赛；竞赛；争夺", "breakdown": "con(一起)+test", "example": "arm-wrestling（掰手腕 / 较量）"}, {"id": "113", "date": "6/20", "root": "test = 见证 / 证明", "mastery": "", "word": "protest", "pos": "v./n.", "meaning": "抗议；反对", "breakdown": "pro(向前)+test", "example": ""}, {"id": "114", "date": "6/20", "root": "test = 见证 / 证明", "mastery": "", "word": "testify", "pos": "v.", "meaning": "作证；证明", "breakdown": "test+ify(使)", "example": ""}, {"id": "115", "date": "6/20", "root": "test = 见证 / 证明", "mastery": "", "word": "testimony", "pos": "n.", "meaning": "证词；证言", "breakdown": "test+imony", "example": ""}, {"id": "116", "date": "6/20", "root": "sum① = 和 / 总和", "mastery": "", "word": "summary", "pos": "n.", "meaning": "摘要；总结", "breakdown": "sum(总)+mary", "example": "a two-page summary of…"}, {"id": "117", "date": "6/20", "root": "sum① = 和 / 总和", "mastery": "", "word": "summit", "pos": "n.", "meaning": "山顶；顶峰；首脑会议", "breakdown": "summ+it", "example": ""}, {"id": "118", "date": "6/20", "root": "sum① = 和 / 总和", "mastery": "", "word": "summarize", "pos": "v.", "meaning": "总结；概括", "breakdown": "summary+ize", "example": ""}, {"id": "119", "date": "6/20", "root": "sum② = take（拿）", "mastery": "", "word": "consumer", "pos": "n.", "meaning": "消费者", "breakdown": "con+sum(拿)+er", "example": ""}, {"id": "120", "date": "6/20", "root": "sum② = take（拿）", "mastery": "", "word": "consume", "pos": "v.", "meaning": "消耗；消费", "breakdown": "con+sum(拿)", "example": "energy / fuel consumption"}, {"id": "121", "date": "6/20", "root": "sum② = take（拿）", "mastery": "", "word": "consumption", "pos": "n.", "meaning": "消耗（量）；消费", "breakdown": "consume+ption", "example": ""}, {"id": "122", "date": "6/20", "root": "sum② = take（拿）", "mastery": "", "word": "assume", "pos": "v.", "meaning": "假定；假设；承担", "breakdown": "a(=ad 加强)+sum(拿)", "example": "We cannot assume anything in this case"}, {"id": "123", "date": "6/20", "root": "sum② = take（拿）", "mastery": "", "word": "assumption", "pos": "n.", "meaning": "假定；假设", "breakdown": "assume+ption", "example": "make the assumption that…"}, {"id": "124", "date": "6/20", "root": "sum② = take（拿）", "mastery": "", "word": "presume", "pos": "v.", "meaning": "推测；假定", "breakdown": "pre(提前)+sum(拿)", "example": ""}, {"id": "125", "date": "6/20", "root": "sum② = take（拿）", "mastery": "", "word": "presumption", "pos": "n.", "meaning": "推测；假定", "breakdown": "presume+ption", "example": ""}, {"id": "126", "date": "6/20", "root": "sum② = take（拿）", "mastery": "", "word": "resume", "pos": "v./n.", "meaning": "继续；恢复 / 简历", "breakdown": "re+sum(拿)", "example": "resume = 继续进行；restart 重启；（n.）简历"}, {"id": "127", "date": "6/20", "root": "sum② = take（拿）", "mastery": "", "word": "resumption", "pos": "n.", "meaning": "恢复；重新开始", "breakdown": "resume+ption", "example": ""}, {"id": "128", "date": "6/20", "root": "vol = will / wish（意愿）", "mastery": "", "word": "will", "pos": "n.", "meaning": "意志；意愿", "breakdown": "", "example": "Where there's a will, there's a way"}, {"id": "129", "date": "6/20", "root": "vol = will / wish（意愿）", "mastery": "", "word": "willpower", "pos": "n.", "meaning": "意志力", "breakdown": "will+power", "example": ""}, {"id": "130", "date": "6/20", "root": "vol = will / wish（意愿）", "mastery": "", "word": "willing", "pos": "adj.", "meaning": "愿意的；乐意的", "breakdown": "will+ing", "example": ""}, {"id": "131", "date": "6/20", "root": "vol = will / wish（意愿）", "mastery": "", "word": "（反义）reluctant", "pos": "adj.", "meaning": "不情愿的；勉强的", "breakdown": "", "example": "reluctant to do sth."}, {"id": "132", "date": "6/20", "root": "vol = will / wish（意愿）", "mastery": "", "word": "reluctance", "pos": "n.", "meaning": "不情愿；勉强", "breakdown": "reluctant+ce", "example": "agreed with reluctance（勉强同意）"}, {"id": "133", "date": "6/20", "root": "vol = will / wish（意愿）", "mastery": "", "word": "volunteer", "pos": "n./v.", "meaning": "志愿者；自愿（做）", "breakdown": "vol(意愿)+unteer", "example": "volunteer to do sth."}, {"id": "134", "date": "6/20", "root": "vol = will / wish（意愿）", "mastery": "", "word": "voluntary", "pos": "adj.", "meaning": "自愿的；志愿的", "breakdown": "vol+untary", "example": "voluntary organization / association"}, {"id": "135", "date": "6/20", "root": "vol = will / wish（意愿）", "mastery": "", "word": "volition", "pos": "n.", "meaning": "意志；自愿", "breakdown": "vol+ition", "example": "of your own volition（出于自愿）"}, {"id": "136", "date": "6/20", "root": "bene = good\nmal = bad（善 / 恶）", "mastery": "", "word": "benevolent", "pos": "adj.", "meaning": "仁慈的；善意的", "breakdown": "bene(善)+vol(意愿)+ent", "example": "benevolent smile / look / person"}, {"id": "137", "date": "6/20", "root": "bene = good\nmal = bad（善 / 恶）", "mastery": "", "word": "malevolent ↔ benevolent", "pos": "adj.", "meaning": "恶意的；恶毒的", "breakdown": "mal(恶)+vol+ent", "example": "malevolent smile / look / person"}, {"id": "138", "date": "6/20", "root": "bene = good\nmal = bad（善 / 恶）", "mastery": "", "word": "malice", "pos": "n.", "meaning": "恶意", "breakdown": "", "example": ""}, {"id": "139", "date": "6/20", "root": "bene = good\nmal = bad（善 / 恶）", "mastery": "", "word": "malicious", "pos": "adj.", "meaning": "恶意的；蓄意的", "breakdown": "mal(恶)+icious", "example": ""}, {"id": "140", "date": "6/20", "root": "bene = good\nmal = bad（善 / 恶）", "mastery": "", "word": "malnutrition", "pos": "n.", "meaning": "营养不良", "breakdown": "mal(不良)+nutrition", "example": "children suffering from severe malnutrition"}, {"id": "141", "date": "6/20", "root": "sol = sun / one / alone（太阳 / 单独）", "mastery": "", "word": "solar", "pos": "adj.", "meaning": "太阳的", "breakdown": "sol(太阳)+ar", "example": "solar energy"}, {"id": "142", "date": "6/20", "root": "sol = sun / one / alone（太阳 / 单独）", "mastery": "", "word": "solo", "pos": "n./adj.", "meaning": "独奏；独唱；单独", "breakdown": "sol(单)+o", "example": "a gorgeous piano solo；→ duet 二重奏 / trio 三重奏"}, {"id": "143", "date": "6/20", "root": "sol = sun / one / alone（太阳 / 单独）", "mastery": "△", "word": "desolate", "pos": "adj.", "meaning": "荒凉的；凄凉的", "breakdown": "de+sol+ate", "example": ""}, {"id": "144", "date": "6/20", "root": "sol = sun / one / alone（太阳 / 单独）", "mastery": "", "word": "island", "pos": "n.", "meaning": "岛", "breakdown": "", "example": "（isl = sol 的变体）"}, {"id": "145", "date": "6/20", "root": "sol = sun / one / alone（太阳 / 单独）", "mastery": "", "word": "isle（诗歌 / 地名）", "pos": "n.", "meaning": "岛", "breakdown": "", "example": "the British Isles"}, {"id": "146", "date": "6/20", "root": "sol = sun / one / alone（太阳 / 单独）", "mastery": "", "word": "isolate", "pos": "v.", "meaning": "使孤立；隔离", "breakdown": "isol(alone)+ate", "example": "the US has sought to isolate Cuba"}, {"id": "147", "date": "6/20", "root": "sol = sun / one / alone（太阳 / 单独）", "mastery": "", "word": "solitary", "pos": "adj.", "meaning": "孤独的；独自的", "breakdown": "sol(one)+itary", "example": "solitary life / island（= living alone）"}, {"id": "148", "date": "6/20", "root": "sol = sun / one / alone（太阳 / 单独）", "mastery": "", "word": "peninsula", "pos": "n.", "meaning": "半岛", "breakdown": "pen(几乎)+insula(岛)", "example": ""}, {"id": "149", "date": "6/20", "root": "sol = sun / one / alone（太阳 / 单独）", "mastery": "", "word": "insulator", "pos": "n.", "meaning": "绝缘体", "breakdown": "insul(岛)+ator", "example": "绝缘（热 / 电）"}, {"id": "150", "date": "6/20", "root": "sol = sun / one / alone（太阳 / 单独）", "mastery": "", "word": "soliloquy = monologue", "pos": "n.", "meaning": "独白", "breakdown": "soli(独)+loqu(说)", "example": "（戏剧中的）独白"}, {"id": "151", "date": "6/20", "root": "sol = sun / one / alone（太阳 / 单独）", "mastery": "", "word": "solemn", "pos": "adj.", "meaning": "庄严的；严肃的；隆重的", "breakdown": "", "example": ""}, {"id": "152", "date": "6/20", "root": "sol = sun / one / alone（太阳 / 单独）", "mastery": "", "word": "solemnity", "pos": "n.", "meaning": "庄严；庄重", "breakdown": "solemn+ity", "example": ""}, {"id": "153", "date": "6/20", "root": "sol = sun / one / alone（太阳 / 单独）", "mastery": "", "word": "console", "pos": "v.", "meaning": "安慰；抚慰", "breakdown": "con+sol(comfort)", "example": ""}, {"id": "154", "date": "6/26", "root": "rect = 直，正", "mastery": "", "word": "correct", "pos": "adj./v.", "meaning": "正确的；改正", "breakdown": "rect(直/正)", "example": ""}, {"id": "155", "date": "6/26", "root": "rect = 直，正", "mastery": "", "word": "direct", "pos": "adj./v.", "meaning": "直接的；指导", "breakdown": "", "example": ""}, {"id": "156", "date": "6/26", "root": "rect = 直，正", "mastery": "", "word": "rectify", "pos": "v.", "meaning": "纠正；矫正", "breakdown": "rect+ify", "example": ""}, {"id": "157", "date": "6/26", "root": "aud = to hear", "mastery": "", "word": "audio", "pos": "adj./n.", "meaning": "音频（的）", "breakdown": "", "example": ""}, {"id": "158", "date": "6/26", "root": "aud = to hear", "mastery": "", "word": "audience", "pos": "n.", "meaning": "听众；观众", "breakdown": "", "example": ""}, {"id": "159", "date": "6/26", "root": "aud = to hear", "mastery": "", "word": "auditorium", "pos": "n.", "meaning": "观众席；礼堂", "breakdown": "", "example": ""}, {"id": "160", "date": "6/26", "root": "aud = to hear", "mastery": "", "word": "auditory", "pos": "adj.", "meaning": "听觉的", "breakdown": "", "example": ""}, {"id": "161", "date": "6/26", "root": "aud = to hear", "mastery": "", "word": "audible", "pos": "adj.", "meaning": "听得见的", "breakdown": "", "example": ""}, {"id": "162", "date": "6/26", "root": "aud = to hear", "mastery": "", "word": "inaudible", "pos": "adj.", "meaning": "听不见的", "breakdown": "", "example": ""}, {"id": "163", "date": "6/26", "root": "aud = to hear", "mastery": "", "word": "oral", "pos": "adj.", "meaning": "口头的", "breakdown": "", "example": ""}, {"id": "164", "date": "6/26", "root": "aud = to hear", "mastery": "", "word": "aural", "pos": "adj.", "meaning": "听觉的", "breakdown": "", "example": ""}, {"id": "165", "date": "6/26", "root": "aud = to hear", "mastery": "", "word": "audit", "pos": "n./v.", "meaning": "审计", "breakdown": "", "example": ""}, {"id": "166", "date": "6/26", "root": "aud = to hear", "mastery": "", "word": "obey", "pos": "v.", "meaning": "遵从", "breakdown": "", "example": ""}, {"id": "167", "date": "6/26", "root": "aud = to hear", "mastery": "", "word": "obedient", "pos": "adj.", "meaning": "顺从的；听话的", "breakdown": "", "example": ""}, {"id": "168", "date": "6/26", "root": "aud = to hear", "mastery": "", "word": "obedience", "pos": "n.", "meaning": "顺从", "breakdown": "", "example": ""}, {"id": "169", "date": "6/26", "root": "aud = to hear", "mastery": "", "word": "disobey", "pos": "v.", "meaning": "不遵从", "breakdown": "", "example": ""}, {"id": "170", "date": "6/26", "root": "aud = to hear", "mastery": "", "word": "disobedient", "pos": "adj.", "meaning": "不听话的", "breakdown": "", "example": ""}, {"id": "171", "date": "6/26", "root": "aud = to hear", "mastery": "", "word": "disobedience", "pos": "n.", "meaning": "不顺从", "breakdown": "", "example": ""}, {"id": "172", "date": "6/26", "root": "tract = 拉", "mastery": "", "word": "train（拉车）", "pos": "n.", "meaning": "火车", "breakdown": "", "example": ""}, {"id": "173", "date": "6/26", "root": "tract = 拉", "mastery": "", "word": "train（拉练）", "pos": "v.", "meaning": "训练", "breakdown": "", "example": ""}, {"id": "174", "date": "6/26", "root": "tract = 拉", "mastery": "", "word": "coach", "pos": "n.", "meaning": "长途公交车；教练", "breakdown": "", "example": ""}, {"id": "175", "date": "6/26", "root": "tract = 拉", "mastery": "", "word": "training", "pos": "n.", "meaning": "训练", "breakdown": "", "example": ""}, {"id": "176", "date": "6/26", "root": "tract = 拉", "mastery": "", "word": "trailer", "pos": "n.", "meaning": "拖车", "breakdown": "", "example": ""}, {"id": "177", "date": "6/26", "root": "tract = 拉", "mastery": "", "word": "trail（拖）", "pos": "v.", "meaning": "拖", "breakdown": "", "example": ""}, {"id": "178", "date": "6/26", "root": "tract = 拉", "mastery": "", "word": "trail（小路）", "pos": "n.", "meaning": "（乡间）小路", "breakdown": "", "example": ""}, {"id": "179", "date": "6/26", "root": "tract = 拉", "mastery": "", "word": "trace", "pos": "n./v.", "meaning": "踪迹", "breakdown": "", "example": ""}, {"id": "180", "date": "6/26", "root": "tract = 拉", "mastery": "", "word": "trait", "pos": "n.", "meaning": "特点", "breakdown": "", "example": ""}, {"id": "181", "date": "6/26", "root": "tract = 拉", "mastery": "", "word": "portrait", "pos": "n.", "meaning": "画像；肖像", "breakdown": "", "example": ""}, {"id": "182", "date": "6/26", "root": "tract = 拉", "mastery": "", "word": "portray", "pos": "v.", "meaning": "描写", "breakdown": "", "example": ""}, {"id": "183", "date": "6/26", "root": "tract = 拉", "mastery": "", "word": "traitor", "pos": "n.", "meaning": "叛徒", "breakdown": "", "example": "a traitor to..."}, {"id": "184", "date": "6/26", "root": "tract = 拉", "mastery": "", "word": "betray", "pos": "v.", "meaning": "背叛", "breakdown": "", "example": ""}, {"id": "185", "date": "6/26", "root": "tract = 拉", "mastery": "", "word": "retract", "pos": "v.", "meaning": "撤回（声明/控诉/供述）", "breakdown": "", "example": ""}, {"id": "186", "date": "6/26", "root": "tract = 拉", "mastery": "", "word": "retreat（撤退）", "pos": "v./n.", "meaning": "撤退（部队）", "breakdown": "", "example": "反义：advance"}, {"id": "187", "date": "6/26", "root": "tract = 拉", "mastery": "", "word": "retreat（静居所）", "pos": "n.", "meaning": "静居所（撤回乡下）", "breakdown": "", "example": ""}, {"id": "188", "date": "6/26", "root": "tract = 拉", "mastery": "", "word": "treaty", "pos": "n.", "meaning": "（国家或政府之间）条约", "breakdown": "", "example": ""}, {"id": "189", "date": "6/26", "root": "press = 按，压", "mastery": "", "word": "press（按压）", "pos": "v.", "meaning": "按，压", "breakdown": "", "example": ""}, {"id": "190", "date": "6/26", "root": "press = 按，压", "mastery": "", "word": "press（出版社）", "pos": "n.", "meaning": "出版社", "breakdown": "", "example": ""}, {"id": "191", "date": "6/26", "root": "press = 按，压", "mastery": "", "word": "press（新闻界）", "pos": "n.", "meaning": "新闻界", "breakdown": "", "example": "the freedom of press 新闻自由"}, {"id": "192", "date": "6/26", "root": "press = 按，压", "mastery": "", "word": "compress", "pos": "v.", "meaning": "压缩", "breakdown": "两边一起按", "example": ""}, {"id": "193", "date": "6/26", "root": "press = 按，压", "mastery": "", "word": "compression", "pos": "n.", "meaning": "压缩", "breakdown": "", "example": ""}, {"id": "194", "date": "6/26", "root": "press = 按，压", "mastery": "", "word": "depress", "pos": "v.", "meaning": "向下压；使某人沮丧", "breakdown": "", "example": ""}, {"id": "195", "date": "6/26", "root": "press = 按，压", "mastery": "", "word": "depression", "pos": "n.", "meaning": "忧愁；沮丧；消沉", "breakdown": "", "example": ""}, {"id": "196", "date": "6/26", "root": "press = 按，压", "mastery": "", "word": "suppress", "pos": "v.", "meaning": "制止；镇压", "breakdown": "sub=向下", "example": ""}, {"id": "197", "date": "6/26", "root": "press = 按，压", "mastery": "", "word": "oppress", "pos": "v.", "meaning": "压迫；压制", "breakdown": "op=对立", "example": ""}, {"id": "198", "date": "6/26", "root": "press = 按，压", "mastery": "", "word": "oppression", "pos": "n.", "meaning": "压迫", "breakdown": "", "example": "political/racial oppression 政治/种族压迫"}, {"id": "199", "date": "6/26", "root": "press = 按，压", "mastery": "", "word": "pressure", "pos": "n.", "meaning": "压力；压强", "breakdown": "", "example": "blood pressure 血压"}, {"id": "200", "date": "6/26", "root": "press = 按，压", "mastery": "", "word": "repress", "pos": "v.", "meaning": "约束/抑制（冲动）", "breakdown": "re=back", "example": ""}, {"id": "201", "date": "6/26", "root": "press = 按，压", "mastery": "", "word": "repression", "pos": "n.", "meaning": "压抑", "breakdown": "", "example": "sexual repression 性压抑"}, {"id": "202", "date": "6/26", "root": "range", "mastery": "", "word": "range（范围）", "pos": "n.", "meaning": "范围", "breakdown": "", "example": "age/price range; within a … range"}, {"id": "203", "date": "6/26", "root": "range", "mastery": "", "word": "range（一系列）", "pos": "n.", "meaning": "一系列；一整套", "breakdown": "", "example": "a range of…"}, {"id": "204", "date": "6/26", "root": "range", "mastery": "", "word": "range（射程）", "pos": "n.", "meaning": "射程", "breakdown": "", "example": "missiles with a range of 3000km"}, {"id": "205", "date": "6/26", "root": "range", "mastery": "", "word": "arrange", "pos": "v.", "meaning": "安排；整理（某事/日程）", "breakdown": "", "example": "arrange the shelf / the timetable / marriage"}, {"id": "206", "date": "6/26", "root": "range", "mastery": "", "word": "rank", "pos": "n.", "meaning": "等级；社会地位", "breakdown": "", "example": "high social rank"}, {"id": "207", "date": "6/26", "root": "vail", "mastery": "", "word": "validate", "pos": "v.", "meaning": "使…有效；批准；认可", "breakdown": "", "example": "validate a contract / marriage"}, {"id": "208", "date": "6/26", "root": "vail", "mastery": "", "word": "available", "pos": "adj.", "meaning": "可用的；可获得的", "breakdown": "a→ad, vail=value+able", "example": ""}, {"id": "209", "date": "6/26", "root": "vail", "mastery": "", "word": "MBA（网络流行语）", "pos": "phrase", "meaning": "已婚但仍可撩（married but available）", "breakdown": "", "example": "网络流行语"}, {"id": "210", "date": "6/26", "root": "vail", "mastery": "", "word": "prevail", "pos": "v.", "meaning": "获胜；盛行", "breakdown": "", "example": "Justice will prevail."}, {"id": "211", "date": "6/26", "root": "vail", "mastery": "", "word": "prevalent", "pos": "adj.", "meaning": "流行的；普遍存在的", "breakdown": "", "example": ""}, {"id": "212", "date": "6/26", "root": "hib = to hold", "mastery": "", "word": "exhibition", "pos": "n.", "meaning": "展览", "breakdown": "ex=out, hib=to hold；≈fair", "example": ""}, {"id": "213", "date": "6/26", "root": "hib = to hold", "mastery": "", "word": "exhibit", "pos": "v./n.", "meaning": "展出；展品", "breakdown": "", "example": ""}, {"id": "214", "date": "6/26", "root": "hib = to hold", "mastery": "", "word": "inhibit", "pos": "v.", "meaning": "阻碍；抑制", "breakdown": "", "example": "握在手里，阻碍"}, {"id": "215", "date": "6/26", "root": "hib = to hold", "mastery": "", "word": "prohibit", "pos": "v.", "meaning": "禁止", "breakdown": "", "example": ""}, {"id": "216", "date": "6/26", "root": "hib = to hold", "mastery": "", "word": "carp", "pos": "v.", "meaning": "抱怨；不停地挑剔", "breakdown": "", "example": ""}, {"id": "217", "date": "6/26", "root": "primary：pri = first", "mastery": "", "word": "primary", "pos": "adj.", "meaning": "主要的；初级的", "breakdown": "pri=first→important", "example": ""}, {"id": "218", "date": "6/26", "root": "primary：pri = first", "mastery": "", "word": "prefix", "pos": "n.", "meaning": "前缀", "breakdown": "pre+fix", "example": ""}, {"id": "219", "date": "6/26", "root": "primary：pri = first", "mastery": "", "word": "primarily", "pos": "adv.", "meaning": "主要地", "breakdown": "", "example": ""}, {"id": "220", "date": "6/26", "root": "primary：pri = first", "mastery": "", "word": "prior", "pos": "adj.", "meaning": "之前的；在先的", "breakdown": "[正式] before", "example": "prior to = 在…之前；prior knowledge = previous knowledge"}, {"id": "221", "date": "6/26", "root": "primary：pri = first", "mastery": "", "word": "priority", "pos": "n.", "meaning": "优先事项；优先权", "breakdown": "", "example": "The priority is to win the League."}, {"id": "222", "date": "6/26", "root": "primary：pri = first", "mastery": "", "word": "prime minister", "pos": "n.", "meaning": "首相", "breakdown": "", "example": ""}, {"id": "223", "date": "6/26", "root": "primary：pri = first", "mastery": "", "word": "primitive", "pos": "adj.", "meaning": "原始的", "breakdown": "", "example": ""}, {"id": "224", "date": "6/26", "root": "primary：pri = first", "mastery": "", "word": "primate", "pos": "n.", "meaning": "灵长类动物", "breakdown": "", "example": ""}, {"id": "225", "date": "6/26", "root": "primary：pri = first", "mastery": "", "word": "primeval forest", "pos": "n.", "meaning": "原始森林", "breakdown": "ev=age/time", "example": ""}, {"id": "226", "date": "7/3", "root": "counter = against", "mastery": "", "word": "counter", "pos": "n./v.", "meaning": "反对；反驳", "breakdown": "等于against", "example": "counter strike (CS); counter an argument/criticism"}, {"id": "227", "date": "7/3", "root": "counter = against", "mastery": "", "word": "counterpart", "pos": "n.", "meaning": "作用相当的事物", "breakdown": "", "example": ""}, {"id": "228", "date": "7/3", "root": "counter = against", "mastery": "", "word": "encounter", "pos": "v./n.", "meaning": "偶遇；遭遇", "breakdown": "", "example": ""}, {"id": "229", "date": "7/3", "root": "counter = against", "mastery": "", "word": "contradict", "pos": "v.", "meaning": "反驳；自相矛盾", "breakdown": "dict=to speak", "example": "The well-bred contradict others; the wise contradict themselves."}, {"id": "230", "date": "7/3", "root": "counter = against", "mastery": "", "word": "dictionary", "pos": "n.", "meaning": "字典", "breakdown": "", "example": ""}, {"id": "231", "date": "7/3", "root": "counter = against", "mastery": "", "word": "dictate", "pos": "v.", "meaning": "口述；听写；命令", "breakdown": "", "example": ""}, {"id": "232", "date": "7/3", "root": "counter = against", "mastery": "", "word": "controversial", "pos": "adj.", "meaning": "有争议的", "breakdown": "", "example": ""}, {"id": "233", "date": "7/3", "root": "counter = against", "mastery": "", "word": "contrast", "pos": "n./v.", "meaning": "对比；对照（强调差异）", "breakdown": "", "example": "常置于名词/动词之后"}, {"id": "234", "date": "7/3", "root": "counter = against", "mastery": "", "word": "compare", "pos": "v.", "meaning": "比较（找出相似或不同之处）", "breakdown": "", "example": ""}, {"id": "235", "date": "7/3", "root": "counter = against", "mastery": "", "word": "contrary", "pos": "n.", "meaning": "相反", "breakdown": "", "example": "on the contrary ⇔ in contrast = however"}, {"id": "236", "date": "7/3", "root": "counter = against", "mastery": "", "word": "controversy", "pos": "n.", "meaning": "争议", "breakdown": "", "example": ""}, {"id": "237", "date": "7/3", "root": "reply：pli/ply = to fold", "mastery": "", "word": "reply", "pos": "v./n.", "meaning": "回复；答复", "breakdown": "ply=to fold", "example": ""}, {"id": "238", "date": "7/3", "root": "reply：pli/ply = to fold", "mastery": "", "word": "plight", "pos": "n.", "meaning": "困境", "breakdown": "", "example": ""}, {"id": "239", "date": "7/3", "root": "reply：pli/ply = to fold", "mastery": "", "word": "imply", "pos": "v.", "meaning": "暗示；暗指", "breakdown": "", "example": "an implied threat"}, {"id": "240", "date": "7/3", "root": "reply：pli/ply = to fold", "mastery": "", "word": "implicit", "pos": "adj.", "meaning": "未言明的；含蓄的", "breakdown": "", "example": ""}, {"id": "241", "date": "7/3", "root": "reply：pli/ply = to fold", "mastery": "", "word": "explicit", "pos": "adj.", "meaning": "明确的；清楚说明的", "breakdown": "", "example": "an explicit warning"}, {"id": "242", "date": "7/3", "root": "reply：pli/ply = to fold", "mastery": "", "word": "explicate", "pos": "v.", "meaning": "详细解释", "breakdown": "", "example": ""}, {"id": "243", "date": "7/3", "root": "reply：pli/ply = to fold", "mastery": "", "word": "simplicity", "pos": "n.", "meaning": "简单；朴素", "breakdown": "", "example": ""}, {"id": "244", "date": "7/3", "root": "reply：pli/ply = to fold", "mastery": "", "word": "simplify", "pos": "v.", "meaning": "简化", "breakdown": "", "example": ""}, {"id": "245", "date": "7/3", "root": "reply：pli/ply = to fold", "mastery": "", "word": "simplification", "pos": "n.", "meaning": "简化", "breakdown": "", "example": "simplification of that theory"}, {"id": "246", "date": "7/3", "root": "reply：pli/ply = to fold", "mastery": "", "word": "simplistic", "pos": "adj.", "meaning": "过分简单化的", "breakdown": "", "example": ""}, {"id": "247", "date": "7/3", "root": "reply：pli/ply = to fold", "mastery": "", "word": "complicated", "pos": "adj.", "meaning": "复杂的", "breakdown": "", "example": "等于complex"}, {"id": "248", "date": "7/3", "root": "reply：pli/ply = to fold", "mastery": "", "word": "perplex", "pos": "v.", "meaning": "使困惑", "breakdown": "per=through，≈puzzle", "example": ""}, {"id": "249", "date": "7/3", "root": "reply：pli/ply = to fold", "mastery": "", "word": "perplexing", "pos": "adj.", "meaning": "令人困惑的", "breakdown": "", "example": ""}, {"id": "250", "date": "7/3", "root": "reply：pli/ply = to fold", "mastery": "", "word": "display", "pos": "n./v.", "meaning": "展示；陈列", "breakdown": "", "example": "superb display"}, {"id": "251", "date": "7/3", "root": "reply：pli/ply = to fold", "mastery": "", "word": "curved display", "pos": "n.", "meaning": "曲面显示器", "breakdown": "", "example": ""}, {"id": "252", "date": "7/3", "root": "reply：pli/ply = to fold", "mastery": "", "word": "deploy", "pos": "v.", "meaning": "部署", "breakdown": "（不折叠，与fold相反）", "example": ""}, {"id": "253", "date": "7/3", "root": "reply：pli/ply = to fold", "mastery": "", "word": "employ", "pos": "v.", "meaning": "雇用；使用", "breakdown": "", "example": "(un)employment"}, {"id": "254", "date": "7/3", "root": "norm", "mastery": "", "word": "normal", "pos": "adj.", "meaning": "正常的", "breakdown": "norm=standard", "example": ""}, {"id": "255", "date": "7/3", "root": "norm", "mastery": "", "word": "abnormal", "pos": "adj.", "meaning": "不正常的；异常的", "breakdown": "ab=away", "example": ""}, {"id": "256", "date": "7/3", "root": "norm", "mastery": "", "word": "normalize", "pos": "v.", "meaning": "使正常化", "breakdown": "", "example": ""}, {"id": "257", "date": "7/3", "root": "norm", "mastery": "", "word": "enormous", "pos": "adj.", "meaning": "巨大的", "breakdown": "e=ex=出", "example": ""}, {"id": "258", "date": "7/3", "root": "quali/ty\nquanti/ty", "mastery": "", "word": "quality", "pos": "n.", "meaning": "质量；品质", "breakdown": "", "example": ""}, {"id": "259", "date": "7/3", "root": "quali/ty\nquanti/ty", "mastery": "", "word": "qualitative", "pos": "adj.", "meaning": "性质上的；定性的", "breakdown": "", "example": ""}, {"id": "260", "date": "7/3", "root": "quali/ty\nquanti/ty", "mastery": "", "word": "qualify", "pos": "v.", "meaning": "使有资格", "breakdown": "", "example": ""}, {"id": "261", "date": "7/3", "root": "quali/ty\nquanti/ty", "mastery": "", "word": "qualification", "pos": "n.", "meaning": "资格", "breakdown": "", "example": ""}, {"id": "262", "date": "7/3", "root": "quali/ty\nquanti/ty", "mastery": "", "word": "quantity", "pos": "n.", "meaning": "数量", "breakdown": "", "example": ""}, {"id": "263", "date": "7/3", "root": "quali/ty\nquanti/ty", "mastery": "", "word": "quantitative", "pos": "adj.", "meaning": "数量上的；定量的", "breakdown": "", "example": ""}, {"id": "264", "date": "7/3", "root": "quali/ty\nquanti/ty", "mastery": "", "word": "quantify", "pos": "v.", "meaning": "量化", "breakdown": "", "example": ""}, {"id": "265", "date": "7/3", "root": "value", "mastery": "", "word": "value", "pos": "n./v.", "meaning": "价值；重视", "breakdown": "", "example": ""}, {"id": "266", "date": "7/3", "root": "value", "mastery": "", "word": "valuable", "pos": "adj.", "meaning": "贵重的；有价值的", "breakdown": "", "example": ""}, {"id": "267", "date": "7/3", "root": "value", "mastery": "", "word": "invaluable", "pos": "adj.", "meaning": "无价的；极其宝贵的", "breakdown": "", "example": ""}, {"id": "268", "date": "7/3", "root": "value", "mastery": "", "word": "priceless", "pos": "adj.", "meaning": "无价的", "breakdown": "", "example": ""}, {"id": "269", "date": "7/3", "root": "value", "mastery": "", "word": "worthless", "pos": "adj.", "meaning": "没有价值的", "breakdown": "", "example": ""}, {"id": "270", "date": "7/3", "root": "value", "mastery": "", "word": "evaluate", "pos": "v.", "meaning": "评估", "breakdown": "e=ex", "example": ""}, {"id": "271", "date": "7/3", "root": "value", "mastery": "", "word": "assess", "pos": "v.", "meaning": "评估", "breakdown": "", "example": ""}, {"id": "272", "date": "7/3", "root": "value", "mastery": "", "word": "assessment", "pos": "n.", "meaning": "评估", "breakdown": "", "example": ""}, {"id": "273", "date": "7/3", "root": "value", "mastery": "", "word": "equivalent", "pos": "adj./n.", "meaning": "等值的；相当的", "breakdown": "equal+value", "example": "be equivalent to = 等同于"}, {"id": "274", "date": "7/3", "root": "value", "mastery": "", "word": "valid", "pos": "adj.", "meaning": "有效的", "breakdown": "", "example": ""}, {"id": "275", "date": "7/3", "root": "value", "mastery": "", "word": "invalid", "pos": "adj.", "meaning": "无效的", "breakdown": "", "example": ""}, {"id": "276", "date": "6/18", "root": "", "mastery": "", "word": "abolish", "pos": "v.", "meaning": "废除（制度 / 法律）", "breakdown": "", "example": "abolish slavery"}, {"id": "277", "date": "6/18", "root": "", "mastery": "", "word": "contemplate", "pos": "v.", "meaning": "沉思；考虑；展望", "breakdown": "", "example": "contemplate the future / history"}, {"id": "278", "date": "6/18", "root": "", "mastery": "", "word": "intensive", "pos": "adj.", "meaning": "密集的；集中的；集约的", "breakdown": "", "example": "intensive training；intensive farming"}, {"id": "279", "date": "6/18", "root": "", "mastery": "", "word": "encounter", "pos": "v./n.", "meaning": "遭遇；偶遇；邂逅；交锋", "breakdown": "en+counter", "example": "encounter dangers / strangers"}, {"id": "280", "date": "6/18", "root": "", "mastery": "", "word": "pose", "pos": "v./n.", "meaning": "造成（威胁）；摆姿势", "breakdown": "", "example": "pose a threat（构成威胁）"}, {"id": "281", "date": "6/18", "root": "", "mastery": "", "word": "undermine", "pos": "v.", "meaning": "削弱；暗中破坏", "breakdown": "under(下)+mine(挖)", "example": ""}, {"id": "282", "date": "6/18", "root": "", "mastery": "", "word": "fertilize", "pos": "v.", "meaning": "使肥沃；施肥；使受精", "breakdown": "fertil(肥)+ize", "example": ""}, {"id": "283", "date": "6/18", "root": "", "mastery": "", "word": "widow", "pos": "n.", "meaning": "寡妇", "breakdown": "", "example": ""}, {"id": "284", "date": "6/18", "root": "", "mastery": "", "word": "widowed", "pos": "adj.", "meaning": "丧偶的", "breakdown": "widow+ed", "example": ""}, {"id": "285", "date": "6/18", "root": "", "mastery": "", "word": "dusk", "pos": "n.", "meaning": "黄昏；傍晚", "breakdown": "", "example": "at dusk；from dusk till dawn（从黄昏到黎明）"}, {"id": "286", "date": "6/18", "root": "", "mastery": "", "word": "famine", "pos": "n.", "meaning": "饥荒", "breakdown": "", "example": ""}, {"id": "287", "date": "6/20", "root": "", "mastery": "", "word": "gleam", "pos": "v./n.", "meaning": "闪烁；闪光", "breakdown": "", "example": "the sea gleamed in the sunlight"}, {"id": "288", "date": "6/20", "root": "", "mastery": "", "word": "bound", "pos": "adj./v./n.", "meaning": "一定会；注定 / 跳跃 / 边界", "breakdown": "", "example": "bound to do（一定会）"}, {"id": "289", "date": "6/20", "root": "", "mastery": "", "word": "boundary", "pos": "n.", "meaning": "边界；界限", "breakdown": "bound+ary", "example": ""}, {"id": "290", "date": "6/20", "root": "", "mastery": "", "word": "bounce", "pos": "v./n.", "meaning": "弹跳；反弹", "breakdown": "", "example": ""}, {"id": "291", "date": "6/20", "root": "", "mastery": "", "word": "sheer", "pos": "adj.", "meaning": "纯粹的；完全的；陡峭的", "breakdown": "", "example": ""}, {"id": "292", "date": "6/20", "root": "", "mastery": "", "word": "refrain", "pos": "v.", "meaning": "克制；忍住（from）", "breakdown": "", "example": "refrain from talking / smoking"}];
+const LOCAL_CODE_KEY = 'vocab-sync-code';
+const LOCAL_CACHE_PREFIX = 'vocab-cache-';
+
+let code = localStorage.getItem(LOCAL_CODE_KEY) || '';
+let entries = [];
+
+function esc(s){ return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function masteryClass(m){ if(m==='△') return 'mastery-mid'; if(m==='✗') return 'mastery-low'; return ''; }
+function genId(){ return Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
+function todayLabel(){ const d = new Date(); return `${d.getMonth()+1}/${d.getDate()}`; }
+
+function showToast(msg, isError){
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.toggle('error', !!isError);
+  t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'), 2200);
+}
+
+function setSyncStatus(state){
+  const dot = document.getElementById('syncDot');
+  const label = document.getElementById('syncLabel');
+  dot.className = 'sync-dot' + (state === 'offline' ? ' offline' : state === 'syncing' ? ' syncing' : '');
+  label.textContent = state === 'offline' ? '离线（本地缓存）' : state === 'syncing' ? '同步中…' : '已同步';
+}
+
+// ---------- text wrapping / diagram (unchanged visual logic) ----------
+function wrapText(str, maxLen){
+  if(str.length <= maxLen) return [str];
+  const lines = []; let cur = '';
+  const parts = str.split(/([\s·，,\/])/).filter(Boolean);
+  for(const p of parts){
+    if((cur + p).length > maxLen && cur.length > 0){ lines.push(cur); cur = p.trimStart(); }
+    else cur += p;
+  }
+  if(cur) lines.push(cur);
+  return lines;
+}
+function buildRootLines(rootStr){
+  const rawLines = rootStr.split('\n'); let out = [];
+  rawLines.forEach(l => { out = out.concat(wrapText(l.trim(), 15)); });
+  return out;
+}
+function groupEntries(list){
+  const groups = []; const byRoot = new Map(); const standalone = [];
+  list.forEach(e => {
+    const r = (e.root||'').trim();
+    if(!r){ standalone.push(e); return; }
+    if(!byRoot.has(r)){ const g = {root: r, words: []}; byRoot.set(r, g); groups.push(g); }
+    byRoot.get(r).words.push(e);
+  });
+  return {groups, standalone};
+}
+function makeDiagram(group, idx){
+  const n = group.words.length;
+  const R = Math.max(78, 60 + 14 * n);
+  const nodeW = n > 12 ? 66 : (n > 6 ? 74 : 84);
+  const nodeH = 34;
+  const pad = 70;
+  const W = 2 * R + 2 * pad; const H = W; const cx = W/2, cy = H/2;
+  const rootLines = buildRootLines(group.root);
+  const rootBoxW = Math.min(180, Math.max(90, Math.max(...rootLines.map(l=>l.length)) * 9 + 24));
+  const rootBoxH = rootLines.length * 15 + 20;
+
+  let svg = `<svg class="diagram" viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" data-gid="${idx}">`;
+  const positions = [];
+  for(let i=0;i<n;i++){
+    const angle = (2*Math.PI*i/n) - Math.PI/2;
+    positions.push({nx: cx+R*Math.cos(angle), ny: cy+R*Math.sin(angle)});
+  }
+  // 不再画连线，单词只按放射状围绕词根排布，视觉上更清爽
+  svg += `<g class="node-root"><rect x="${cx-rootBoxW/2}" y="${cy-rootBoxH/2}" width="${rootBoxW}" height="${rootBoxH}" rx="12" />`;
+  rootLines.forEach((l, li) => {
+    const dy = (li - (rootLines.length-1)/2) * 15;
+    svg += `<text x="${cx}" y="${cy+dy+4}" text-anchor="middle" font-size="12.5">${esc(l)}</text>`;
+  });
+  svg += `</g>`;
+  positions.forEach((p, i) => {
+    const w = group.words[i];
+    const mc = masteryClass(w.mastery);
+    const wordLabel = w.word.length > 12 ? w.word.slice(0,11)+'…' : w.word;
+    const meanLabel = (w.meaning||'').length > 8 ? w.meaning.slice(0,7)+'…' : (w.meaning||'');
+    svg += `<g class="node-word ${mc}" data-gid="${idx}" data-eid="${w.id}">`;
+    svg += `<rect x="${p.nx-nodeW/2}" y="${p.ny-nodeH/2}" width="${nodeW}" height="${nodeH}" rx="9" />`;
+    svg += `<text class="w" x="${p.nx}" y="${p.ny-2}" text-anchor="middle" font-size="11.5">${esc(wordLabel)}</text>`;
+    svg += `<text class="m" x="${p.nx}" y="${p.ny+12}" text-anchor="middle" font-size="9.5">${esc(meanLabel)}</text>`;
+    svg += `</g>`;
+  });
+  svg += `</svg>`;
+  return svg;
+}
+function mchipLabel(m){ if(m==='△') return '△ 模糊'; if(m==='✗') return '✗ 复习'; return '已掌握'; }
+function nextMastery(m){ if(m==='') return '△'; if(m==='△') return '✗'; return ''; }
+
+function renderDetail(container, entry){
+  if(!entry){ container.innerHTML = `<span class="ph">点击词卡查看拆解方式与例句 …</span>`; return; }
+  const mc = masteryClass(entry.mastery);
+  let html = `<div class="drow"><div>`;
+  html += `<span class="dw">${esc(entry.word)}</span><span class="dp">${esc(entry.pos)}</span>`;
+  html += `<span class="mastery-chip ${mc}" data-eid="${entry.id}" data-action="cycle-mastery">${mchipLabel(entry.mastery)}</span>`;
+  html += `<div class="dm" style="margin-top:4px;">${esc(entry.meaning)}</div>`;
+  if(entry.breakdown) html += `<span class="db">拆解：${esc(entry.breakdown)}</span>`;
+  if(entry.example) html += `<span class="de">${esc(entry.example)}</span>`;
+  html += `</div><div class="dactions"><button class="btn ghost small" data-eid="${entry.id}" data-action="delete">删除</button></div></div>`;
+  container.innerHTML = html;
+}
+
+function buildCard(group, idx){
+  const card = document.createElement('div');
+  card.className = 'card' + (group.words.length >= 9 ? ' big' : '');
+  card.dataset.searchtext = (group.root + ' ' + group.words.map(w=>w.word+' '+w.meaning).join(' ')).toLowerCase();
+  const dates = [...new Set(group.words.map(w=>w.date))].filter(Boolean);
+  const dateLabel = dates.length ? dates[dates.length-1] : '';
+  const head = document.createElement('div');
+  head.className = 'card-head';
+  head.innerHTML = `<span class="word-count">${group.words.length} 词</span><span class="root-date">${esc(dateLabel)}</span>`;
+  card.appendChild(head);
+  const dwrap = document.createElement('div');
+  dwrap.className = 'diagram-wrap';
+  dwrap.innerHTML = makeDiagram(group, idx);
+  card.appendChild(dwrap);
+  const detail = document.createElement('div');
+  detail.className = 'detail';
+  renderDetail(detail, null);
+  card.appendChild(detail);
+
+  dwrap.querySelectorAll('.node-word').forEach(node => {
+    node.addEventListener('click', () => {
+      dwrap.querySelectorAll('.node-word').forEach(x=>x.classList.remove('active'));
+      node.classList.add('active');
+      const eid = node.dataset.eid;
+      const entry = entries.find(e => e.id === eid);
+      renderDetail(detail, entry);
+    });
+  });
+  detail.addEventListener('click', (ev) => {
+    const btn = ev.target.closest('[data-action]');
+    if(!btn) return;
+    const eid = btn.dataset.eid;
+    if(btn.dataset.action === 'delete'){ deleteEntry(eid); }
+    if(btn.dataset.action === 'cycle-mastery'){ cycleMastery(eid); }
+  });
+  return card;
+}
+
+function buildLeaf(entry){
+  const el = document.createElement('div');
+  el.className = 'leaf ' + masteryClass(entry.mastery);
+  el.dataset.searchtext = (entry.word + ' ' + entry.meaning).toLowerCase();
+  el.innerHTML = `
+    <div><span class="lw">${esc(entry.word)}</span><span class="lp">${esc(entry.pos)}</span></div>
+    <div class="lm">${esc(entry.meaning)}</div>
+    ${entry.example ? `<div class="le">${esc(entry.example)}</div>` : ''}
+  `;
+  el.addEventListener('click', () => {
+    if(confirm(`删除「${entry.word}」？`)) deleteEntry(entry.id);
+  });
+  return el;
+}
+
+function render(){
+  const {groups, standalone} = groupEntries(entries);
+  const grid = document.getElementById('grid');
+  grid.innerHTML = '';
+  groups.forEach((g, idx) => grid.appendChild(buildCard(g, idx)));
+
+  const leafGrid = document.getElementById('leafGrid');
+  leafGrid.innerHTML = '';
+  standalone.slice().reverse().forEach(w => leafGrid.appendChild(buildLeaf(w)));
+
+  document.getElementById('stat-groups').textContent = groups.length;
+  document.getElementById('stat-words').textContent = entries.length;
+  const allDates = new Set(entries.map(e=>e.date).filter(Boolean));
+  document.getElementById('stat-dates').textContent = allDates.size;
+  document.getElementById('standalone-count').textContent = standalone.length + ' 词';
+
+  const rootList = document.getElementById('rootList');
+  rootList.innerHTML = '';
+  groups.map(g=>g.root).forEach(r => {
+    const opt = document.createElement('option');
+    opt.value = r;
+    rootList.appendChild(opt);
+  });
+  applySearchFilter();
+}
+
+function applySearchFilter(){
+  const q = document.getElementById('search').value.trim().toLowerCase();
+  document.querySelectorAll('#grid .card').forEach(c => c.classList.toggle('hidden', q && !c.dataset.searchtext.includes(q)));
+  document.querySelectorAll('#leafGrid .leaf').forEach(c => c.classList.toggle('hidden', q && !c.dataset.searchtext.includes(q)));
+}
+
+// ---------- Cloud sync layer ----------
+function cacheLocally(){
+  try{ localStorage.setItem(LOCAL_CACHE_PREFIX + code, JSON.stringify(entries)); }catch(e){}
+}
+function loadLocalCache(){
+  try{
+    const raw = localStorage.getItem(LOCAL_CACHE_PREFIX + code);
+    return raw ? JSON.parse(raw) : null;
+  }catch(e){ return null; }
+}
+
+function rowToEntry(row){
+  return { id: row.id, date: row.date||'', root: row.root||'', mastery: row.mastery||'',
+    word: row.word||'', pos: row.pos||'', meaning: row.meaning||'', breakdown: row.breakdown||'', example: row.example||'' };
+}
+function entryToRow(e){
+  return { id: e.id, code, date: e.date||'', root: e.root||'', mastery: e.mastery||'',
+    word: e.word, pos: e.pos||'', meaning: e.meaning, breakdown: e.breakdown||'', example: e.example||'' };
+}
+
+async function fetchEntries(){
+  setSyncStatus('syncing');
+  const { data, error } = await sb.from('vocab_entries').select('*').eq('code', code).order('updated_at', {ascending:true});
+  if(error){
+    setSyncStatus('offline');
+    const cached = loadLocalCache();
+    if(cached){ entries = cached; showToast('离线：显示上次同步的数据', true); return {ok:false, empty:false}; }
+    entries = [];
+    return {ok:false, empty:true};
+  }
+  entries = data.map(rowToEntry);
+  cacheLocally();
+  setSyncStatus('online');
+  return {ok:true, empty: entries.length === 0};
+}
+
+async function insertEntry(entry){
+  entries.push(entry);
+  cacheLocally();
+  render();
+  setSyncStatus('syncing');
+  const { error } = await sb.from('vocab_entries').insert(entryToRow(entry));
+  if(error){ setSyncStatus('offline'); showToast('保存到云端失败，已存在本机，联网后重新保存一次', true); }
+  else setSyncStatus('online');
+}
+
+async function deleteEntry(eid){
+  entries = entries.filter(e => e.id !== eid);
+  cacheLocally();
+  render();
+  setSyncStatus('syncing');
+  const { error } = await sb.from('vocab_entries').delete().eq('id', eid).eq('code', code);
+  if(error){ setSyncStatus('offline'); showToast('删除未同步到云端，联网后请重试', true); }
+  else { setSyncStatus('online'); showToast('已删除'); }
+}
+
+async function cycleMastery(eid){
+  const entry = entries.find(e => e.id === eid);
+  if(!entry) return;
+  entry.mastery = nextMastery(entry.mastery);
+  cacheLocally();
+  render();
+  setSyncStatus('syncing');
+  const { error } = await sb.from('vocab_entries').update({mastery: entry.mastery}).eq('id', eid).eq('code', code);
+  setSyncStatus(error ? 'offline' : 'online');
+}
+
+async function upsertMany(list){
+  setSyncStatus('syncing');
+  const rows = list.map(entryToRow);
+  const { error } = await sb.from('vocab_entries').upsert(rows, {onConflict:'id'});
+  if(error){ setSyncStatus('offline'); showToast('云端同步失败：' + error.message, true); return false; }
+  setSyncStatus('online');
+  return true;
+}
+
+// ---------- Onboarding ----------
+function showOnboard(){ document.getElementById('onboard').classList.remove('hidden'); }
+function hideOnboard(){ document.getElementById('onboard').classList.add('hidden'); }
+
+async function startWithCode(newCode){
+  code = newCode.trim();
+  if(!code) return;
+  localStorage.setItem(LOCAL_CODE_KEY, code);
+  const res = await fetchEntries();
+  if(res.empty){
+    document.getElementById('ob-choice').classList.add('show');
+    document.getElementById('ob-continue').style.display = 'none';
+    document.getElementById('ob-code').disabled = true;
+  } else {
+    hideOnboard();
+    render();
+    document.getElementById('currentCodeDisplay').textContent = code;
+  }
+}
+
+document.getElementById('ob-continue').addEventListener('click', () => {
+  startWithCode(document.getElementById('ob-code').value);
+});
+document.getElementById('ob-code').addEventListener('keydown', (e) => {
+  if(e.key === 'Enter') startWithCode(document.getElementById('ob-code').value);
+});
+document.getElementById('ob-seed').addEventListener('click', async () => {
+  entries = SEED.map(e => ({...e}));
+  cacheLocally();
+  await upsertMany(entries);
+  hideOnboard();
+  render();
+  document.getElementById('currentCodeDisplay').textContent = code;
+});
+document.getElementById('ob-empty').addEventListener('click', () => {
+  entries = [];
+  cacheLocally();
+  hideOnboard();
+  render();
+  document.getElementById('currentCodeDisplay').textContent = code;
+});
+
+// ---------- Sync panel ----------
+document.getElementById('syncStatus').addEventListener('click', () => {
+  document.getElementById('syncPanel').classList.toggle('open');
+});
+document.getElementById('closeSyncPanel').addEventListener('click', () => {
+  document.getElementById('syncPanel').classList.remove('open');
+});
+document.getElementById('copyCode').addEventListener('click', () => {
+  navigator.clipboard.writeText(code).then(()=>showToast('口令已复制'));
+});
+document.getElementById('btnSwitchCode').addEventListener('click', () => {
+  if(!confirm('切换口令会显示另一份数据（当前这份仍安全地留在云端）。确定切换？')) return;
+  localStorage.removeItem(LOCAL_CODE_KEY);
+  location.reload();
+});
+document.getElementById('btnRestoreDefault').addEventListener('click', async () => {
+  if(!confirm('会把内置默认词表（292 词）合并进你当前的数据（同名 id 会被覆盖，不会删除你自己新增的词）。确定继续？')) return;
+  const seedCopy = SEED.map(e => ({...e}));
+  const existingIds = new Set(entries.map(e=>e.id));
+  const merged = [...entries];
+  seedCopy.forEach(se => {
+    const idx = merged.findIndex(e => e.id === se.id);
+    if(idx >= 0) merged[idx] = se; else merged.push(se);
+  });
+  entries = merged;
+  cacheLocally();
+  render();
+  const ok = await upsertMany(seedCopy);
+  if(ok) showToast('默认词表已合并');
+});
+
+// ---------- Add word ----------
+document.getElementById('toggleAdd').addEventListener('click', () => {
+  const panel = document.getElementById('addPanel');
+  panel.classList.toggle('open');
+  if(panel.classList.contains('open')){
+    if(!document.getElementById('f-date').value) document.getElementById('f-date').value = todayLabel();
+    document.getElementById('f-word').focus();
+  }
+});
+document.getElementById('cancelAdd').addEventListener('click', () => {
+  document.getElementById('addPanel').classList.remove('open');
+});
+document.getElementById('submitAdd').addEventListener('click', async () => {
+  const word = document.getElementById('f-word').value.trim();
+  const meaning = document.getElementById('f-meaning').value.trim();
+  const msg = document.getElementById('formMsg');
+  if(!word || !meaning){
+    msg.textContent = '「单词」和「释义」是必填项';
+    msg.style.color = 'var(--rust)';
+    return;
+  }
+  const entry = {
+    id: genId(),
+    date: document.getElementById('f-date').value.trim(),
+    root: document.getElementById('f-root').value.trim(),
+    mastery: document.getElementById('f-mastery').value,
+    word, meaning,
+    pos: document.getElementById('f-pos').value.trim(),
+    breakdown: document.getElementById('f-breakdown').value.trim(),
+    example: document.getElementById('f-example').value.trim(),
+  };
+  await insertEntry(entry);
+  msg.textContent = `已保存「${word}」`;
+  msg.style.color = 'var(--sprout)';
+  ['f-word','f-meaning','f-pos','f-breakdown','f-example','f-root'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('f-mastery').value = '';
+  document.getElementById('f-word').focus();
+});
+
+// ---------- Export / Import ----------
+document.getElementById('btnExport').addEventListener('click', () => {
+  const blob = new Blob([JSON.stringify(entries, null, 1)], {type: 'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `词根备份_${new Date().toISOString().slice(0,10)}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+});
+document.getElementById('btnImportTrigger').addEventListener('click', () => {
+  document.getElementById('btnImport').click();
+});
+document.getElementById('btnImport').addEventListener('change', async (ev) => {
+  const file = ev.target.files[0];
+  if(!file) return;
+  try{
+    const text = await file.text();
+    const imported = JSON.parse(text);
+    if(!Array.isArray(imported)) throw new Error('格式不对，应该是一个数组');
+    const cleaned = imported.map(e => ({
+      id: e.id || genId(), date: e.date||'', root: e.root||'', mastery: e.mastery||'',
+      word: e.word||'', pos: e.pos||'', meaning: e.meaning||'', breakdown: e.breakdown||'', example: e.example||''
+    })).filter(e => e.word && e.meaning);
+    const existingIds = new Set(entries.map(e=>e.id));
+    const merged = [...entries];
+    cleaned.forEach(ce => {
+      const idx = merged.findIndex(e => e.id === ce.id);
+      if(idx >= 0) merged[idx] = ce; else merged.push(ce);
+    });
+    entries = merged;
+    cacheLocally();
+    render();
+    const ok = await upsertMany(cleaned);
+    showToast(ok ? `已导入 ${cleaned.length} 条` : '本机已导入，云端同步失败');
+  }catch(err){
+    showToast('导入失败：' + err.message, true);
+  }
+  ev.target.value = '';
+});
+
+// ---------- Photo recognize & import ----------
+let photoFile = null;
+let reviewEntries = [];
+
+document.getElementById('togglePhoto').addEventListener('click', () => {
+  document.getElementById('photoPanel').classList.toggle('open');
+});
+document.getElementById('photoCancel').addEventListener('click', () => {
+  document.getElementById('photoPanel').classList.remove('open');
+});
+document.getElementById('photo-choose').addEventListener('click', () => {
+  document.getElementById('photo-input').click();
+});
+document.getElementById('photo-input').addEventListener('change', (ev) => {
+  const file = ev.target.files[0];
+  if(!file) return;
+  photoFile = file;
+  document.getElementById('photo-filename').textContent = file.name;
+  const preview = document.getElementById('photo-preview');
+  preview.src = URL.createObjectURL(file);
+  preview.style.display = 'block';
+  document.getElementById('photoRecognize').disabled = false;
+  document.getElementById('photoReview').innerHTML = '';
+});
+
+function fileToBase64(file){
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result.split(',')[1]);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+function reviewFieldRow(entry, idx){
+  return `
+    <div class="review-row" data-idx="${idx}">
+      <div class="review-row-head">
+        <span>识别结果 #${idx+1}</span>
+        <button class="btn ghost small" data-remove="${idx}">删除这条</button>
+      </div>
+      <div class="form-grid">
+        <div class="field"><label>日期</label><input data-f="date" data-idx="${idx}" value="${esc(entry.date)}"></div>
+        <div class="field span2"><label>词根组</label><input data-f="root" data-idx="${idx}" value="${esc(entry.root)}"></div>
+        <div class="field"><label>掌握度</label>
+          <select data-f="mastery" data-idx="${idx}">
+            <option value="" ${entry.mastery===''?'selected':''}>已掌握</option>
+            <option value="△" ${entry.mastery==='△'?'selected':''}>△ 印象模糊</option>
+            <option value="✗" ${entry.mastery==='✗'?'selected':''}>✗ 需重点复习</option>
+          </select>
+        </div>
+        <div class="field"><label>单词 *</label><input data-f="word" data-idx="${idx}" value="${esc(entry.word)}"></div>
+        <div class="field"><label>词性</label><input data-f="pos" data-idx="${idx}" value="${esc(entry.pos)}"></div>
+        <div class="field span2"><label>释义 *</label><input data-f="meaning" data-idx="${idx}" value="${esc(entry.meaning)}"></div>
+        <div class="field span2"><label>拆解</label><input data-f="breakdown" data-idx="${idx}" value="${esc(entry.breakdown)}"></div>
+        <div class="field span2"><label>例句 / 搭配</label><textarea data-f="example" data-idx="${idx}">${esc(entry.example)}</textarea></div>
+      </div>
+    </div>`;
+}
+
+function renderReview(){
+  const container = document.getElementById('photoReview');
+  if(reviewEntries.length === 0){
+    container.innerHTML = '';
+    return;
+  }
+  let html = reviewEntries.map((e, i) => reviewFieldRow(e, i)).join('');
+  html += `<div class="form-actions" style="margin-top:14px;">
+    <span class="form-msg">共 ${reviewEntries.length} 条，确认无误后再导入</span>
+    <button class="btn small" id="photoConfirmImport">确认导入全部</button>
+  </div>`;
+  container.innerHTML = html;
+
+  container.querySelectorAll('[data-remove]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const idx = +btn.dataset.remove;
+      reviewEntries.splice(idx, 1);
+      renderReview();
+    });
+  });
+  container.querySelectorAll('[data-f]').forEach(input => {
+    input.addEventListener('input', () => {
+      const idx = +input.dataset.idx;
+      reviewEntries[idx][input.dataset.f] = input.value;
+    });
+  });
+  const confirmBtn = document.getElementById('photoConfirmImport');
+  if(confirmBtn){
+    confirmBtn.addEventListener('click', async () => {
+      const cleaned = reviewEntries
+        .map(e => ({ ...e, id: genId() }))
+        .filter(e => e.word && e.word.trim() && e.meaning && e.meaning.trim());
+      if(cleaned.length === 0){
+        showToast('没有可导入的条目（单词/释义不能为空）', true);
+        return;
+      }
+      entries = [...entries, ...cleaned];
+      cacheLocally();
+      render();
+      const ok = await upsertMany(cleaned);
+      showToast(ok ? `已导入 ${cleaned.length} 条` : '本机已导入，云端同步失败');
+      reviewEntries = [];
+      document.getElementById('photoReview').innerHTML = '';
+      document.getElementById('photoPanel').classList.remove('open');
+      photoFile = null;
+      document.getElementById('photo-preview').style.display = 'none';
+      document.getElementById('photo-filename').textContent = '';
+      document.getElementById('photoRecognize').disabled = true;
+    });
+  }
+}
+
+document.getElementById('photoRecognize').addEventListener('click', async () => {
+  if(!photoFile) return;
+  const msg = document.getElementById('photoMsg');
+  const btn = document.getElementById('photoRecognize');
+  btn.disabled = true;
+  msg.innerHTML = `<span class="spinner"></span>识别中，可能需要几秒到十几秒…`;
+  try{
+    const base64 = await fileToBase64(photoFile);
+    const resp = await fetch('/api/recognize', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ imageBase64: base64, mediaType: photoFile.type || 'image/jpeg' })
+    });
+    const data = await resp.json();
+    if(!resp.ok){
+      msg.textContent = '识别失败：' + (data.error || resp.statusText);
+      msg.style.color = 'var(--rust)';
+      btn.disabled = false;
+      return;
+    }
+    reviewEntries = (data.entries || []).map(e => ({
+      date: e.date||'', root: e.root||'', mastery: e.mastery||'',
+      word: e.word||'', pos: e.pos||'', meaning: e.meaning||'',
+      breakdown: e.breakdown||'', example: e.example||''
+    }));
+    if(reviewEntries.length === 0){
+      msg.textContent = '没识别出内容，可以换一张更清晰的照片试试';
+      msg.style.color = 'var(--amber)';
+    } else {
+      msg.textContent = `识别到 ${reviewEntries.length} 条，请检查下面的内容再导入`;
+      msg.style.color = 'var(--sprout)';
+    }
+    renderReview();
+  }catch(err){
+    msg.textContent = '识别出错：' + err.message;
+    msg.style.color = 'var(--rust)';
+  }
+  btn.disabled = false;
+});
+
+document.getElementById('search').addEventListener('input', applySearchFilter);
+
+window.addEventListener('online', () => { if(code) fetchEntries().then(render); });
+window.addEventListener('offline', () => setSyncStatus('offline'));
+
+// ---------- Boot ----------
+(async function init(){
+  if(!code){
+    showOnboard();
+    return;
+  }
+  document.getElementById('currentCodeDisplay').textContent = code;
+  const res = await fetchEntries();
+  if(res.empty && entries.length === 0){
+    document.getElementById('ob-code').value = code;
+    document.getElementById('ob-code').disabled = true;
+    document.getElementById('ob-continue').style.display = 'none';
+    document.getElementById('ob-choice').classList.add('show');
+    showOnboard();
+    return;
+  }
+  render();
+})();
+
+if('serviceWorker' in navigator){
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js').catch(()=>{});
+  });
+}
+</script>
+</body>
+</html>

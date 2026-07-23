@@ -1,77 +1,32 @@
-const CACHE = 'vocab-app-shell-v2';
-const SHELL = ['/manifest.json'];
+const CACHE = 'vocab-app-shell-v2'; // 每次你想强制所有设备拿到最新版本，就把这个版本号改一下
+const SHELL = ['/', '/index.html', '/manifest.json'];
 
-self.addEventListener('install', (event) => {
-  event.waitUntil(
-    caches
-      .open(CACHE)
-      .then((cache) => cache.addAll(SHELL))
-      .catch(() => {})
-  );
-
+self.addEventListener('install', (e) => {
+  e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL)).catch(()=>{}));
   self.skipWaiting();
 });
 
-self.addEventListener('activate', (event) => {
-  event.waitUntil(
-    caches
-      .keys()
-      .then((keys) =>
-        Promise.all(
-          keys
-            .filter((key) => key !== CACHE)
-            .map((key) => caches.delete(key))
-        )
-      )
-      .then(() => self.clients.claim())
+self.addEventListener('activate', (e) => {
+  e.waitUntil(
+    caches.keys().then(keys => Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k))))
   );
+  self.clients.claim();
 });
 
-self.addEventListener('fetch', (event) => {
-  const request = event.request;
-  const url = new URL(request.url);
-
-  // 首页和 index.html 使用网络优先，避免一直显示旧版本
-  if (
-    request.mode === 'navigate' ||
-    url.pathname === '/' ||
-    url.pathname === '/index.html'
-  ) {
-    event.respondWith(
-      fetch(request)
-        .then((response) => {
-          const copy = response.clone();
-
-          caches
-            .open(CACHE)
-            .then((cache) => cache.put('/index.html', copy));
-
-          return response;
+// App shell: 网络优先，拿不到网络才退回缓存（离线兜底）。
+// 这样每次重新部署，用户下次打开就能拿到最新代码，而不是卡在旧缓存里。
+self.addEventListener('fetch', (e) => {
+  const url = new URL(e.request.url);
+  if(SHELL.includes(url.pathname)){
+    e.respondWith(
+      fetch(e.request)
+        .then(res => {
+          const resClone = res.clone();
+          caches.open(CACHE).then(c => c.put(e.request, resClone));
+          return res;
         })
-        .catch(() => caches.match('/index.html'))
-    );
-
-    return;
-  }
-
-  // manifest 使用缓存优先
-  if (SHELL.includes(url.pathname)) {
-    event.respondWith(
-      caches.match(request).then((cached) => {
-        if (cached) return cached;
-
-        return fetch(request).then((response) => {
-          const copy = response.clone();
-
-          caches
-            .open(CACHE)
-            .then((cache) => cache.put(request, copy));
-
-          return response;
-        });
-      })
+        .catch(() => caches.match(e.request))
     );
   }
-
-  // Supabase、字体、esm.sh 等其他请求不拦截
+  // 其余请求（Supabase 数据、字体、esm.sh 等）：不拦截，走正常网络请求
 });

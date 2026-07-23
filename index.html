@@ -166,6 +166,9 @@
   .leaf .lp{ font-size: 10.5px; color: var(--ink-faint); font-family: var(--font-mono); margin-left: 6px; }
   .leaf .lm{ font-size: 12.5px; color: var(--ink-dim); margin-top: 3px; }
   .leaf .le{ font-size: 11px; color: var(--sprout-dim); margin-top: 5px; font-style: italic; }
+  .leaf-head{ display:flex; justify-content:space-between; align-items:flex-start; gap:8px; }
+  .leaf-actions{ display:flex; gap:5px; flex-shrink:0; }
+  .leaf-actions .btn{ padding:4px 9px; font-size:10.5px; }
 
   footer{ margin-top: 60px; padding-top: 20px; border-top: 1px solid var(--gold-line); color: var(--ink-faint);
     font-size: 11px; text-align:center; font-family: var(--font-mono); }
@@ -257,7 +260,7 @@
   </div>
 
   <div id="addPanel">
-    <h3>录入新词</h3>
+    <h3 id="addPanelTitle">录入新词</h3>
     <div class="form-grid">
       <div class="field">
         <label>日期</label>
@@ -402,8 +405,8 @@ function groupEntries(list){
 function makeDiagram(group, idx){
   const n = group.words.length;
   const R = Math.max(78, 60 + 14 * n);
-  const nodeW = n > 12 ? 66 : (n > 6 ? 74 : 84);
-  const nodeH = 34;
+  const nodeW = n > 12 ? 76 : (n > 6 ? 86 : 98);
+  const nodeH = 38;
   const pad = 70;
   const W = 2 * R + 2 * pad; const H = W; const cx = W/2, cy = H/2;
   const rootLines = buildRootLines(group.root);
@@ -426,12 +429,10 @@ function makeDiagram(group, idx){
   positions.forEach((p, i) => {
     const w = group.words[i];
     const mc = masteryClass(w.mastery);
-    const wordLabel = w.word.length > 12 ? w.word.slice(0,11)+'…' : w.word;
-    const meanLabel = (w.meaning||'').length > 8 ? w.meaning.slice(0,7)+'…' : (w.meaning||'');
+    const wordLabel = w.word.length > 14 ? w.word.slice(0,13)+'…' : w.word;
     svg += `<g class="node-word ${mc}" data-gid="${idx}" data-eid="${w.id}">`;
-    svg += `<rect x="${p.nx-nodeW/2}" y="${p.ny-nodeH/2}" width="${nodeW}" height="${nodeH}" rx="9" />`;
-    svg += `<text class="w" x="${p.nx}" y="${p.ny-2}" text-anchor="middle" font-size="11.5">${esc(wordLabel)}</text>`;
-    svg += `<text class="m" x="${p.nx}" y="${p.ny+12}" text-anchor="middle" font-size="9.5">${esc(meanLabel)}</text>`;
+    svg += `<rect x="${p.nx-nodeW/2}" y="${p.ny-nodeH/2}" width="${nodeW}" height="${nodeH}" rx="10" />`;
+    svg += `<text class="w" x="${p.nx}" y="${p.ny+5}" text-anchor="middle" font-size="14">${esc(wordLabel)}</text>`;
     svg += `</g>`;
   });
   svg += `</svg>`;
@@ -449,7 +450,7 @@ function renderDetail(container, entry){
   html += `<div class="dm" style="margin-top:4px;">${esc(entry.meaning)}</div>`;
   if(entry.breakdown) html += `<span class="db">拆解：${esc(entry.breakdown)}</span>`;
   if(entry.example) html += `<span class="de">${esc(entry.example)}</span>`;
-  html += `</div><div class="dactions"><button class="btn ghost small" data-eid="${entry.id}" data-action="delete">删除</button></div></div>`;
+  html += `</div><div class="dactions"><button class="btn ghost small" data-eid="${entry.id}" data-action="edit">编辑</button><button class="btn ghost small" data-eid="${entry.id}" data-action="delete">删除</button></div></div>`;
   container.innerHTML = html;
 }
 
@@ -485,6 +486,7 @@ function buildCard(group, idx){
     const btn = ev.target.closest('[data-action]');
     if(!btn) return;
     const eid = btn.dataset.eid;
+    if(btn.dataset.action === 'edit'){ openEditEntry(eid); }
     if(btn.dataset.action === 'delete'){ deleteEntry(eid); }
     if(btn.dataset.action === 'cycle-mastery'){ cycleMastery(eid); }
   });
@@ -496,12 +498,23 @@ function buildLeaf(entry){
   el.className = 'leaf ' + masteryClass(entry.mastery);
   el.dataset.searchtext = (entry.word + ' ' + entry.meaning).toLowerCase();
   el.innerHTML = `
-    <div><span class="lw">${esc(entry.word)}</span><span class="lp">${esc(entry.pos)}</span></div>
+    <div class="leaf-head">
+      <div><span class="lw">${esc(entry.word)}</span><span class="lp">${esc(entry.pos)}</span></div>
+      <div class="leaf-actions">
+        <button class="btn ghost small" data-action="edit">编辑</button>
+        <button class="btn ghost small" data-action="delete">删除</button>
+      </div>
+    </div>
     <div class="lm">${esc(entry.meaning)}</div>
+    ${entry.breakdown ? `<div class="le">拆解：${esc(entry.breakdown)}</div>` : ''}
     ${entry.example ? `<div class="le">${esc(entry.example)}</div>` : ''}
   `;
-  el.addEventListener('click', () => {
-    if(confirm(`删除「${entry.word}」？`)) deleteEntry(entry.id);
+  el.addEventListener('click', (ev) => {
+    const btn = ev.target.closest('[data-action]');
+    if(!btn) return;
+    ev.stopPropagation();
+    if(btn.dataset.action === 'edit') openEditEntry(entry.id);
+    if(btn.dataset.action === 'delete' && confirm(`删除「${entry.word}」？`)) deleteEntry(entry.id);
   });
   return el;
 }
@@ -582,6 +595,36 @@ async function insertEntry(entry){
   const { error } = await sb.from('vocab_entries').insert(entryToRow(entry));
   if(error){ setSyncStatus('offline'); showToast('保存到云端失败，已存在本机，联网后重新保存一次', true); }
   else setSyncStatus('online');
+}
+
+async function updateEntry(updated){
+  const idx = entries.findIndex(e => e.id === updated.id);
+  if(idx < 0) return false;
+  entries[idx] = updated;
+  cacheLocally();
+  render();
+  setSyncStatus('syncing');
+  const { error } = await sb.from('vocab_entries')
+    .update({
+      date: updated.date||'',
+      root: updated.root||'',
+      mastery: updated.mastery||'',
+      word: updated.word,
+      pos: updated.pos||'',
+      meaning: updated.meaning,
+      breakdown: updated.breakdown||'',
+      example: updated.example||''
+    })
+    .eq('id', updated.id)
+    .eq('code', code);
+  if(error){
+    setSyncStatus('offline');
+    showToast('修改未同步到云端：' + error.message, true);
+    return false;
+  }
+  setSyncStatus('online');
+  showToast(`已更新「${updated.word}」`);
+  return true;
 }
 
 async function deleteEntry(eid){
@@ -687,18 +730,61 @@ document.getElementById('btnRestoreDefault').addEventListener('click', async () 
   if(ok) showToast('默认词表已合并');
 });
 
-// ---------- Add word ----------
+// ---------- Add / edit word ----------
+let editingId = null;
+
+function clearEntryForm(){
+  ['f-word','f-meaning','f-pos','f-breakdown','f-example','f-root'].forEach(id => {
+    document.getElementById(id).value = '';
+  });
+  document.getElementById('f-mastery').value = '';
+  document.getElementById('formMsg').textContent = '';
+}
+
+function setAddMode(){
+  editingId = null;
+  document.getElementById('addPanelTitle').textContent = '录入新词';
+  document.getElementById('submitAdd').textContent = '保存';
+  clearEntryForm();
+  document.getElementById('f-date').value = todayLabel();
+}
+
+function openEditEntry(eid){
+  const entry = entries.find(e => e.id === eid);
+  if(!entry) return;
+  editingId = eid;
+  document.getElementById('addPanelTitle').textContent = `编辑：${entry.word}`;
+  document.getElementById('submitAdd').textContent = '保存修改';
+  document.getElementById('f-date').value = entry.date || '';
+  document.getElementById('f-root').value = entry.root || '';
+  document.getElementById('f-mastery').value = entry.mastery || '';
+  document.getElementById('f-word').value = entry.word || '';
+  document.getElementById('f-pos').value = entry.pos || '';
+  document.getElementById('f-meaning').value = entry.meaning || '';
+  document.getElementById('f-breakdown').value = entry.breakdown || '';
+  document.getElementById('f-example').value = entry.example || '';
+  document.getElementById('formMsg').textContent = '';
+  document.getElementById('addPanel').classList.add('open');
+  document.getElementById('addPanel').scrollIntoView({behavior:'smooth', block:'start'});
+  setTimeout(() => document.getElementById('f-word').focus(), 250);
+}
+
 document.getElementById('toggleAdd').addEventListener('click', () => {
   const panel = document.getElementById('addPanel');
-  panel.classList.toggle('open');
-  if(panel.classList.contains('open')){
-    if(!document.getElementById('f-date').value) document.getElementById('f-date').value = todayLabel();
-    document.getElementById('f-word').focus();
+  if(panel.classList.contains('open') && editingId === null){
+    panel.classList.remove('open');
+    return;
   }
+  setAddMode();
+  panel.classList.add('open');
+  document.getElementById('f-word').focus();
 });
+
 document.getElementById('cancelAdd').addEventListener('click', () => {
   document.getElementById('addPanel').classList.remove('open');
+  setAddMode();
 });
+
 document.getElementById('submitAdd').addEventListener('click', async () => {
   const word = document.getElementById('f-word').value.trim();
   const meaning = document.getElementById('f-meaning').value.trim();
@@ -708,22 +794,33 @@ document.getElementById('submitAdd').addEventListener('click', async () => {
     msg.style.color = 'var(--rust)';
     return;
   }
+
   const entry = {
-    id: genId(),
+    id: editingId || genId(),
     date: document.getElementById('f-date').value.trim(),
     root: document.getElementById('f-root').value.trim(),
     mastery: document.getElementById('f-mastery').value,
-    word, meaning,
+    word,
+    meaning,
     pos: document.getElementById('f-pos').value.trim(),
     breakdown: document.getElementById('f-breakdown').value.trim(),
     example: document.getElementById('f-example').value.trim(),
   };
-  await insertEntry(entry);
-  msg.textContent = `已保存「${word}」`;
-  msg.style.color = 'var(--sprout)';
-  ['f-word','f-meaning','f-pos','f-breakdown','f-example','f-root'].forEach(id => document.getElementById(id).value = '');
-  document.getElementById('f-mastery').value = '';
-  document.getElementById('f-word').focus();
+
+  if(editingId){
+    const ok = await updateEntry(entry);
+    if(ok){
+      document.getElementById('addPanel').classList.remove('open');
+      setAddMode();
+    }
+  }else{
+    await insertEntry(entry);
+    msg.textContent = `已保存「${word}」`;
+    msg.style.color = 'var(--sprout)';
+    clearEntryForm();
+    document.getElementById('f-date').value = todayLabel();
+    document.getElementById('f-word').focus();
+  }
 });
 
 // ---------- Export / Import ----------

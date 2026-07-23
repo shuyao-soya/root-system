@@ -22,7 +22,7 @@ const SYSTEM_PROMPT = `你是一个帮用户把手写单词笔记转成结构化
 - 只输出 JSON 数组本身，形如 [{"date":"7/22","root":"...","mastery":"","word":"...","pos":"...","meaning":"...","breakdown":"...","example":"..."}, ...]
 - 如果图片里完全没有可辨认的单词笔记内容，输出空数组 []`;
 
-export default async function handler(req, res) {
+module.exports = async function handler(req, res) {
   if (req.method !== 'POST') {
     res.status(405).json({ error: 'Method not allowed' });
     return;
